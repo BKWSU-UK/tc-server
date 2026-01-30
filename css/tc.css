@@ -1,0 +1,186 @@
+body {
+  
+  /*background-image: url("../img/volume.svg");
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  background-position: 1em, 1em;
+  background-size: 2em, 2em;*/
+}
+
+#elContainer {
+  /* width : 85%; */
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#topMenus {
+}
+
+.js {
+  display : block;
+}
+.nojs {
+  display : none;
+}
+
+.systemMode {
+  max-width: 12em;
+}
+
+.previewButton {
+}
+
+.topTables {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  /* padding-top: 0 !important; */
+  padding-bottom: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.titleBlock {
+  text-align: center;
+  font-size: 1.5vw;
+}
+.about {
+  text-align: center;
+  font-size: 0.8vw;
+}
+
+.modeTitle {
+  width : 7em;
+  text-align: right;
+}
+.modePreviewButtons {
+  width : 10em;
+}
+.modeHolder {
+  width : 17em;
+}
+.playListSelectorTable {
+  width : 27em;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.playListSelectTitle {
+  text-align: right;  
+}
+
+.playListButtons {
+  width : 10em;
+}
+
+.playListButtonSpace1 {
+  display: inline-block;
+  width : 1em;
+}
+.playListButtonSpace2 {
+  display: inline-block;
+  width : 2em;
+}
+
+.playListModalWidth {
+  width : 20%;
+}
+
+.playListTableClass {
+  /* transform:scale(0.8); */
+  /*font-size: 0.85vw;*/
+}
+.playListRowClass {
+  /*transform:scale(0.9);*/
+}
+.deleteConfirmModalWidth {
+  width : 15%;
+}
+
+.scrollable-area {
+  height: 20em;
+  overflow: auto;
+  margin-bottom: 1em;
+}
+
+.tdCust {
+  vertical-align: middle !important;
+}
+
+.tableTimeWidth {
+  width : 2em !important;
+}
+
+.fixExceptWidth {
+  min-width: 6em;
+}
+.fixWeekWidth {
+  min-width: 6em;
+}
+.fixDayWidth {
+  min-width: 8em;
+}
+.fixWhatWidth {
+  min-width: 12em;
+}
+.fixHowWidth {
+  min-width: 5em;
+}
+.fixVolumeWidth {
+  width: 8em !important;
+}
+.fixHowLongWidth {
+  min-width: 4em;
+}
+
+.tooltip-inner {
+  background-color: RebeccaPurple ;
+  color: White;
+}
+
+.tooltip.top .tooltip-arrow {
+  border-top-color: RebeccaPurple ;
+}
+
+.tooltip.right .tooltip-arrow {
+  border-right-color: RebeccaPurple ;
+}
+
+.tooltip.bottom .tooltip-arrow {
+  border-bottom-color: RebeccaPurple ;
+}
+
+.tooltip.left .tooltip-arrow {
+  border-left-color: RebeccaPurple ;
+}
+
+.timePicker {
+  min-width: 19em;
+}
+
+.nowPlayingDiv {
+  text-align: center;
+}
+
+.audioOntop {
+    height: 5em;
+    background-color: BlanchedAlmond;
+    opacity: 100%;
+    position: absolute;
+    top: 0.5em;
+    width: 50%;
+    z-index: 1;
+}
+.vertical-center {
+  min-height: 3.5em;
+
+  display: flex;
+  align-items: center;
+}
+
+.audioVolumeInfo {
+  color : green;
+}
+.audioVolumeIcon {
+  width : 1.25em;
+  height : 0.6em;
+  margin-top : -1em;
+}

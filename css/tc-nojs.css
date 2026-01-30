@@ -1,0 +1,15 @@
+.titleBlock {
+  text-align: center;
+  font-size: 1.5vw;
+}
+.about {
+  text-align: center;
+  font-size: 0.8vw;
+}
+.js {
+  display : none;
+}
+.nojs {
+  display : block;
+  text-align: center;
+}
