@@ -48,7 +48,10 @@
           <i class="bi bi-broadcast-pin me-2"></i>
           <span>Brahma Kumaris Traffic Control</span>
         </a>
-        <div class="ms-auto d-flex align-items-center text-white about-link">
+        <div class="ms-auto d-flex align-items-center text-white about-link gap-3">
+          <a href="#" class="text-white text-decoration-none small" data-bs-toggle="modal" data-bs-target="#userManualModal">
+            <i class="bi bi-book me-1"></i>User Manual
+          </a>
           <a href="more.html" class="text-white text-decoration-none small">
             <i class="bi bi-info-circle me-1"></i>More Info
           </a>
@@ -226,8 +229,72 @@
         </div>
       </div>
       
-      <!-- Required for audio player -->
-      <!-- <script src="js/bootstrap3_player.js"></script> -->
+      <!-- User Manual Modal -->
+      <div class="modal fade" id="userManualModal" tabindex="-1" aria-labelledby="userManualModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+          <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+              <h5 class="modal-title" id="userManualModalLabel"><i class="bi bi-book me-2"></i>User Manual</h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <h5 class="text-primary"><i class="bi bi-music-note-list me-2"></i>Playlists</h5>
+              <p>The left panel contains playlist management controls:</p>
+              <ul>
+                <li><strong>Add (+)</strong>: Create a new playlist.</li>
+                <li><strong>Copy</strong>: Duplicate the current playlist.</li>
+                <li><strong>Rename (pencil)</strong>: Change the playlist name.</li>
+                <li><strong>Delete (trash)</strong>: Remove the current playlist.</li>
+                <li><strong>Dropdown</strong>: Switch between playlists.</li>
+              </ul>
+
+              <h5 class="text-primary mt-4"><i class="bi bi-list-ul me-2"></i>Playlist Items</h5>
+              <p>Each row in the playlist table represents a scheduled audio event:</p>
+              <table class="table table-sm table-bordered">
+                <thead class="table-light">
+                  <tr><th>Column</th><th>Description</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td><strong>Time</strong></td><td>When to play (12-hour format). Click to open the time picker.</td></tr>
+                  <tr><td><strong>Schedule</strong></td><td><em>Every</em> plays on selected days, <em>Except</em> skips selected days, <em>Manual</em> disables automatic playback.</td></tr>
+                  <tr><td><strong>Week</strong></td><td>Restrict to 1st, 2nd, or 3rd week of the month (visible when a specific day is selected).</td></tr>
+                  <tr><td><strong>Day</strong></td><td>Daily or a specific day of the week.</td></tr>
+                  <tr><td><strong>Content</strong></td><td>File or folder path. Select from the file browser.</td></tr>
+                  <tr><td><strong>Mode</strong></td><td><em>Single</em> plays the file, <em>Random</em> or <em>Sequential</em> for folders.</td></tr>
+                  <tr><td><strong>Volume</strong></td><td>Playback volume (0-99). Use the slider or scroll wheel.</td></tr>
+                  <tr><td><strong>Length</strong></td><td><em>Full</em> plays the entire track, or limit to 10-180 seconds with fade-out.</td></tr>
+                  <tr><td><strong>Actions</strong></td><td>Preview (play) or Stop the item.</td></tr>
+                </tbody>
+              </table>
+              <p>Use the <strong>+</strong> and <strong>-</strong> icons in the first column to add or remove rows.</p>
+
+              <h5 class="text-primary mt-4"><i class="bi bi-folder2-open me-2"></i>Selecting Audio</h5>
+              <p>To assign audio to a playlist item:</p>
+              <ol>
+                <li>Click a row in the playlist to select it (highlighted in blue).</li>
+                <li>Click the folder icon in the Content column to open the file browser.</li>
+                <li>Navigate and click a file or folder to select it.</li>
+              </ol>
+              <p>For folders, choose <em>Random</em> or <em>Sequential</em> playback mode.</p>
+
+              <h5 class="text-primary mt-4"><i class="bi bi-toggles me-2"></i>System Mode vs Local Mode</h5>
+              <p>The <strong>System Mode</strong> toggle determines where audio plays:</p>
+              <ul>
+                <li><strong>System</strong>: Audio plays on the Raspberry Pi hardware (requires LAN access).</li>
+                <li><strong>Local</strong>: Audio plays through the browser on your computer.</li>
+              </ul>
+              <p>When in System mode, the <strong>Preview Mode</strong> toggle controls where preview playback occurs.</p>
+
+              <h5 class="text-primary mt-4"><i class="bi bi-bell me-2"></i>Special Content</h5>
+              <p><strong>Chime</strong>: Enter "Chime" in the Content field to play the built-in chime sound. The Length setting controls the duration before the closing chime plays.</p>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
     </div>
     <div class="nojs">
       <img src="img/screenshot.png">
