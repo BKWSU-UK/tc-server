@@ -1143,6 +1143,11 @@ var TC = new function () {
     var entry = TC.stored.list[TC.stored.selectedPlayList].list[index - 1],
         source, compositeVolume,
         player = $('#audioPlayer'), fileVolume = 100;
+    
+    if (!entry || !entry.what) {
+      console.error('No valid entry to play at index ' + index);
+      return;
+    }
         
     TC.playerIndex = index - 1;
     
@@ -1154,20 +1159,25 @@ var TC = new function () {
         source = '.system/Chime_start.flac'
         entry.whatSelectedLocal = source;
         entry.hashSelectedLocal = '';
-      } else {
-        //If this is a directory then make the selection
+      } else if (entry.mime === 'directory') {
         source = entry.whatSelectedLocal;
+      } else {
+        source = entry.what;
       }
       
-      console.log('Playing ' + source + ' at volume ' + compositeVolume + '% for ' + entry.howLong + ' seconds');
+      if (!source) {
+        console.error('No source file available for playback');
+        return;
+      }
+      
+      console.log('Playing locally: ' + source + ' at volume ' + compositeVolume + '% for ' + entry.howLong + ' seconds');
       
       TC.playEngine(player, source, compositeVolume);
       TC.howLong();
       $( '#nowPlayingTag' ).empty().append( source );
-    } else {
-      console.log('Playing ' + entry.whatSelectedRemote + ' at volume ' + compositeVolume + '% for ' + entry.howLong + ' seconds');
     }
     if (TC.system && TC.systemPreview && previewCall) {
+      console.log('Playing on system: ' + (entry.whatSelectedRemote || entry.what) + ' at volume ' + compositeVolume + '%');
       $.ajax({ url: 'php/tc.php?action=play&index=' + TC.playerIndex,
         error: function (xhr) {
           console.error(xhr.status + ': ' + xhr.responseText)

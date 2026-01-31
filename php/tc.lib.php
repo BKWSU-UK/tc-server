@@ -14,7 +14,7 @@
   define ( 'CHIME_START', '.system/Chime_start.flac');
   define ( 'CHIME_END', '.system/Chime_end.flac');
   define ( 'DB_PER_VOL_UNIT', 0.46 );
-  define ( 'OS_COMMANDS', 'svn|bc|amixer|mplayer');
+  define ( 'OS_COMMANDS', 'bc|amixer|mplayer');
   define ( 'CARD_NUM', (function() {
     $aplayOutput = [];
     @exec('aplay -l 2>/dev/null', $aplayOutput);
