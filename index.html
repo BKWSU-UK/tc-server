@@ -21,141 +21,123 @@
     <script src="js/moment.js"></script>
     <script src="js/moment-timezone-with-data.js"></script>
         
-    <!-- elFinder CSS -->
-    <link rel="stylesheet" type="text/css" media="screen" href="elFinder-2.1.65/css/elfinder.min.css">
-    <link rel="stylesheet" type="text/css" media="screen" href="elFinder-2.1.65/css/theme.css">    
-    
-    <!-- elFinder JS -->
-    <script src="elFinder-2.1.65/js/elfinder.full.js"></script>
-
-    <!-- Time picker -->
-    <script src="TimePicki/js/timepicki.js"></script>
-    <link rel="stylesheet" type="text/css" media="screen" href="TimePicki/css/timepicki.css">    
-
     <!-- Bootstrap JS -->
     <script src="js/bootstrap.bundle.min.js"></script>
-    
-    <!-- Slider control -->
-    <link rel="stylesheet" type="text/css" media="screen" href="css/bootstrap-slider.min.css?1">
-    <script src="js/bootstrap-slider.min.js?1"></script>
-    
-    <!-- Toggle control -->
-    <link rel="stylesheet" type="text/css" media="screen" href="css/bootstrap-toggle.min.css">
-    <script src="js/bootstrap-toggle.min.js"></script>
     
     <!-- Local CSS -->
     <link rel="stylesheet" type="text/css" media="screen" href="css/tc-nojs.css">
     <script>
-      document.write('<link rel="stylesheet" href="css/tc.css" />');
+      document.write('<link rel="stylesheet" href="css/tc.css?v=20260130c" />');
     </script>
     
     <!-- Local JS -->
-    <script src="js/tc.js?1"></script>
+    <script src="js/tc.js?v=20260130c"></script>
     
-    <!-- elFinder and time picker initialization -->
     <script>
       $().ready(function() {
-        //Leave out elfinder if no PHP installed
-        $.ajax({ url: 'php/tc.php?action=lan' }).done(function ( result ) {
-          //Normally, the result should be 3 chars in length, either "wan" or "lan"
-          if (result.length == 3) {
-            //elFinder
-            var myCommands = elFinder.prototype._options.commands,
-              disabled = ['open'], elf,
-              selectBind = function(event) {
-                var selected = elf.selectedFiles(), path, hash, mime;
-                  if (selected.length > 0) {
-                    hash = selected[0].hash;
-                    path = elf.path(hash);
-                    mime = selected[0].mime;
-                    TC.fileSelect(path, hash, mime);
-                  }
-                //return false
-              };
-            $.each(disabled, function(i, cmd) {
-              (idx = $.inArray(cmd, myCommands)) !== -1 && myCommands.splice(idx,1);
-            });
-            elf = $('#elfinder').elfinder({
-              url : 'elFinder-2.1.65/php/connector.php',  // connector URL (REQUIRED)
-              // lang: 'ru',             // language (OPTIONAL)
-              commands : myCommands
-            }).elfinder('instance');
-            //Bind elfinder select
-            elf.bind('select', selectBind);
-          }
-        });
         TC.init();
       });
     </script>
 
     
   </head>
-  <body role="document">
-    <h1 class="titleBlock">Brahma Kumaris Traffic Control</h1>
-    <div class="js">
+  <body role="document" class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm mb-4">
+      <div class="container">
+        <a class="navbar-brand d-flex align-items-center" href="#">
+          <i class="bi bi-broadcast-pin me-2"></i>
+          <span>Brahma Kumaris Traffic Control</span>
+        </a>
+        <div class="ms-auto d-flex align-items-center text-white about-link">
+          <a href="more.html" class="text-white text-decoration-none small">
+            <i class="bi bi-info-circle me-1"></i>More Info
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container js">
       <form id="playListForm">
-        <div class="container" id="topMenus">
-          <!-- Audio player -->
-          <div id="audioPlayerDiv" class="audioOntop container">
-            <div class="row vertical-center">
-              <audio id="audioPlayer" class="center-block" controls playStamp="init">
-                An html5-capable browser is required to play this audio. 
-              </audio>
+        <div class="row g-4">
+          <!-- Left Column: Controls and Playlist Selection -->
+          <div class="col-lg-4">
+            <div class="card shadow-sm mb-4 border-0">
+              <div class="card-body">
+                <h5 class="card-title mb-3 d-flex align-items-center">
+                  <i class="bi bi-music-note-list me-2 text-primary"></i>Playlist
+                </h5>
+                <div id="playListSelector">
+                  <!-- JS Generated -->
+                </div>
+              </div>
             </div>
-            <div id="nowPlayingTag" class="row nowPlayingDiv"></div>
+
+            <div class="card shadow-sm mb-4 border-0">
+              <div class="card-body">
+                <h5 class="card-title mb-3 d-flex align-items-center">
+                  <i class="bi bi-gear-fill me-2 text-primary"></i>Settings
+                </h5>
+                <div class="d-grid gap-3">
+                  <div class="toggle-container mode-container">
+                    <span class="small fw-bold text-muted">System Mode</span>
+                    <div class="d-flex align-items-center">
+                      <span class="toggle-label me-2">Local</span>
+                      <label class="toggle-switch">
+                        <input id="modeToggleButton" type="checkbox">
+                        <span class="toggle-slider"></span>
+                      </label>
+                      <span class="toggle-label ms-2">System</span>
+                    </div>
+                  </div>
+                  <div class="toggle-container preview-mode-container">
+                    <span class="small fw-bold text-muted">Preview Mode</span>
+                    <div class="d-flex align-items-center">
+                      <span class="toggle-label me-2">Local</span>
+                      <label class="toggle-switch">
+                        <input id="previewToggleButton" type="checkbox">
+                        <span class="toggle-slider"></span>
+                      </label>
+                      <span class="toggle-label ms-2">System</span>
+                    </div>
+                  </div>
+                  <div class="audio-device-container">
+                    <span class="small fw-bold text-muted d-flex align-items-center">
+                      <i class="bi bi-speaker me-1"></i>Audio Output
+                      <button type="button" class="btn btn-link btn-sm p-0 ms-2" onclick="TC.refreshAudioDevices();" title="Refresh devices">
+                        <i class="bi bi-arrow-clockwise"></i>
+                      </button>
+                    </span>
+                    <select id="audioDeviceSelect" class="form-select form-select-sm mt-1">
+                      <option value="auto">Auto-detect (default)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Audio player card -->
+            <div id="audioPlayerDiv" class="card shadow-sm border-0 bg-primary text-white mb-4" style="display:none;">
+              <div class="card-body p-3 text-center">
+                <div id="nowPlayingTag" class="small mb-2 fw-bold text-truncate"></div>
+                <audio id="audioPlayer" class="w-100" controls playStamp="init">
+                  An html5-capable browser is required.
+                </audio>
+              </div>
+            </div>
           </div>
 
-          <table class="table table-hover topTables">
-            <tbody>
-              <tr>
-                <td class="topTables">
-                  <div id="playListSelector">
-                  </div>
-                </td>
-                <td class="topTables systemMode">
-                  <table class="table table-hover table-condensed">
-                    <tbody>
-                      <tr id="playerMode">
-                        <th class="tdCust modeTitle">
-                          <span class="modeButton">
-                            Mode
-                          </span>
-                        </th>    
-                        <td class="tdCust modePreviewButtons">
-                          <span class="btn btn-light modeButton" data-bs-toggle="tooltip" data-bs-placement="auto" data-bs-animation="true" title="Operate on remote system or in local browser">
-                            <input id="modeToggleButton" type="checkbox" />
-                          </span>
-                        </td>
-                          <th class="tdCust modeTitle">
-                            <span class="previewButton">
-                              Preview
-                            </span>
-                          </th>    
-                          <td class="tdCust modePreviewButtons">
-                            <span class="btn btn-light previewButton" data-bs-toggle="tooltip" data-bs-placement="auto" data-bs-animation="true" title="Preview music on remote system or in local browser">
-                              <input id="previewToggleButton" type="checkbox" />
-                            </span>
-                          </td>
-                      </tr>
-                    </tbody>
-                  </table>
-              </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="container playListDiv" id="playList" >
-        </div>
-        
-        <div class="container" id="elContainer"> 
-        
-          <!-- Element where elFinder will be created -->
-          <div style="all: initial;">
-            <div style="all: unset">
-              <div id="elfinder"></div>
+          <!-- Right Column: Playlist Content -->
+          <div class="col-lg-8">
+            <div class="card shadow-sm border-0 h-100">
+              <div class="card-body p-0">
+                <div id="playList" class="h-100">
+                  <!-- JS Generated -->
+                </div>
+              </div>
             </div>
           </div>
         </div>
+
       </form>
       <!-- Modals -->
       <div class="modal fade" id="editPlaylistName" tabindex="-1" aria-labelledby="playlistNameModalLabel" aria-hidden="true">
@@ -169,7 +151,61 @@
               <form id="playListNameForm"><input type="text" id="playListNameInput" name="playListNameInput" data-bs-toggle="tooltip" data-bs-placement="auto" data-bs-animation="true" title="Play list name"></form>
             </div>
             <div class="modal-footer">
-              <button id="playListNameDone" type="button" class="btn btn-default" data-bs-dismiss="modal">OK</button>
+              <button id="playListNameDone" type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal fade" id="fileBrowserModal" tabindex="-1" aria-labelledby="fileBrowserModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="fileBrowserModalLabel"><i class="bi bi-folder2-open me-2"></i>Select Sound</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+              <div id="fileBrowserBreadcrumb" class="p-3 bg-light border-bottom small"></div>
+              <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
+                <span class="small text-muted"><i class="bi bi-info-circle me-1"></i>Click a folder to browse, or a song to select.</span>
+                <div class="btn-group btn-group-sm">
+                  <button type="button" class="btn btn-outline-secondary" onclick="TC.fileBrowserNewFolder();" title="New Folder"><i class="bi bi-folder-plus"></i></button>
+                  <label class="btn btn-outline-secondary mb-0" title="Upload Files"><i class="bi bi-upload"></i><input type="file" id="fileBrowserUpload" multiple accept="audio/*" style="display:none;" onchange="TC.fileBrowserUpload(this.files);"></label>
+                </div>
+              </div>
+              <div id="fileBrowserContents" style="max-height: 350px; overflow-y: auto;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal fade timePicker" id="timePickerModal" tabindex="-1" aria-labelledby="timePickerModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="timePickerModalLabel"><i class="bi bi-clock me-2"></i>Set Time</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <div class="time-picker-container">
+                <div class="time-picker-column">
+                  <button type="button" class="btn btn-outline-secondary btn-sm w-100" onclick="TC.adjustTime('Hour', 1);"><i class="bi bi-chevron-up"></i></button>
+                  <input type="text" id="tpHour" class="form-control text-center time-picker-input" value="12" readonly>
+                  <button type="button" class="btn btn-outline-secondary btn-sm w-100" onclick="TC.adjustTime('Hour', -1);"><i class="bi bi-chevron-down"></i></button>
+                </div>
+                <div class="time-picker-separator">:</div>
+                <div class="time-picker-column">
+                  <button type="button" class="btn btn-outline-secondary btn-sm w-100" onclick="TC.adjustTime('Minute', 1);"><i class="bi bi-chevron-up"></i></button>
+                  <input type="text" id="tpMinute" class="form-control text-center time-picker-input" value="00" readonly>
+                  <button type="button" class="btn btn-outline-secondary btn-sm w-100" onclick="TC.adjustTime('Minute', -1);"><i class="bi bi-chevron-down"></i></button>
+                </div>
+                <div class="time-picker-ampm">
+                  <button type="button" id="tpAM" class="btn btn-outline-primary btn-sm w-100 active" onclick="TC.toggleAmPm('AM');">AM</button>
+                  <button type="button" id="tpPM" class="btn btn-outline-primary btn-sm w-100" onclick="TC.toggleAmPm('PM');">PM</button>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="button" class="btn btn-primary" onclick="TC.confirmTimePicker();">OK</button>
             </div>
           </div>
         </div>
@@ -183,8 +219,8 @@
             </div>
             <div class="modal-body" id="playListDeleteName"></div>
             <div class="modal-footer">
-              <button id="deleteListConfirm" type="button" class="btn btn-primary" data-bs-dismiss="modal">Delete</button>
-              <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button id="deleteListConfirm" type="button" class="btn btn-danger" data-bs-dismiss="modal">Delete</button>
             </div>
           </div>
         </div>
@@ -195,9 +231,6 @@
     </div>
     <div class="nojs">
       <img src="img/screenshot.png">
-    </div>
-    <div class="about">
-      <a href="more.html">More about the Traffic Control system</a>
     </div>
     
   </body>

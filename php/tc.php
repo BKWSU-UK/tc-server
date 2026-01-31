@@ -33,181 +33,235 @@
   }
   
   include('tc.lib.php');
+  require_once('TrafficControl.class.php');
+  $tc = new TrafficControl();
+
   if (DEBUG) {
     set_exception_handler('errorLog');
   }
   
   if (isset($_REQUEST['action'])) {
-    switch ($_REQUEST['action']) {
-      #Store settings sent from client
-      case 'store':
-        if (!clientInSameSubnet()) {
-          //Not on LAN so don't allow saving
-          http_response_code(403);
-          die('Can not store from WAN');
-        }
-        checkOsCommands ();
-        get_lock('store');
-        if (isset($_REQUEST['tcPersistent'])) {
-          get_stored();
-          find_next();
-          $newStore = json_decode(mb_convert_encoding(rawurldecode($_REQUEST['tcPersistent']), 'ISO-8859-1', 'UTF-8'));
-          //Preserve item-specific remote items
-          if (property_exists($stored, 'list')) {
-            //Directory hash specific
-            foreach ($stored->list as $i => $playList) {                  
-              if (property_exists($playList, 'lastPlay')) {
-                foreach ($playList->lastPlay as $j => $lastPlayHash) {
-                  if (property_exists($newStore->list[$i], 'list') && array_key_exists($j, $newStore->list[$i]->list)) {
-                    if(property_exists($lastPlayHash, 'hashSelectedRemote')) {
-                      @$newStore->list[$i]->lastPlay->{$j}->hashSelectedRemote = $lastPlayHash->hashSelectedRemote;
+    try {
+        $stored = $tc->loadStored(); // Initialize global variable for procedural functions
+        switch ($_REQUEST['action']) {
+          #Store settings sent from client
+          case 'store':
+            $tc->getLock('store');
+            if (isset($_REQUEST['tcPersistent'])) {
+              $stored = $tc->loadStored();
+              $newStore = json_decode(rawurldecode($_REQUEST['tcPersistent']));
+              
+              // Preserve item-specific remote items
+              if (property_exists($stored, 'list')) {
+                foreach ($stored->list as $i => $playList) {                  
+                  if (property_exists($playList, 'lastPlay')) {
+                    foreach ($playList->lastPlay as $j => $lastPlayHash) {
+                      if (isset($newStore->list[$i]->list) && array_key_exists($j, $newStore->list[$i]->list)) {
+                        if(property_exists($lastPlayHash, 'hashSelectedRemote')) {
+                          @$newStore->list[$i]->lastPlay->{$j}->hashSelectedRemote = $lastPlayHash->hashSelectedRemote;
+                        }
+                        if(property_exists($lastPlayHash, 'recentRemote')) {
+                          @$newStore->list[$i]->lastPlay->{$j}->recentRemote = $lastPlayHash->recentRemote;
+                        }
+                      }
                     }
-                    if(property_exists($lastPlayHash, 'recentRemote')) {
-                      @$newStore->list[$i]->lastPlay->{$j}->recentRemote = $lastPlayHash->recentRemote;
+                  }
+                  //Item specific
+                  foreach ($playList->list as $j => $playListItem) {
+                    if (isset($newStore->list[$i]->list) && array_key_exists($j, $newStore->list[$i]->list)) {
+                      if (property_exists($playListItem, 'whatSelectedRemote')) {
+                        @$newStore->list[$i]->list[$j]->whatSelectedRemote = $playListItem->whatSelectedRemote;
+                      }
+                      if (property_exists($playListItem, 'hashSelectedRemote')) {
+                        @$newStore->list[$i]->list[$j]->hashSelectedRemote = $playListItem->hashSelectedRemote;
+                      }
+                      if (property_exists($playListItem, 'recentRemote')) {
+                        @$newStore->list[$i]->list[$j]->recentRemote = $playListItem->recentRemote;
+                      }
                     }
                   }
                 }
               }
-              //Item specific
-              foreach ($playList->list as $j => $playListItem) {
-                if (property_exists($newStore->list[$i], 'list') && array_key_exists($j, $newStore->list[$i]->list)) {
-                  if (property_exists($playListItem, 'whatSelectedRemote')) {
-                    @$newStore->list[$i]->list[$j]->whatSelectedRemote = $playListItem->whatSelectedRemote;
-                  }
-                  if (property_exists($playListItem, 'hashSelectedRemote')) {
-                    @$newStore->list[$i]->list[$j]->hashSelectedRemote = $playListItem->hashSelectedRemote;
-                  }
-                  if (property_exists($playListItem, 'recentRemote')) {
-                    @$newStore->list[$i]->list[$j]->recentRemote = $playListItem->recentRemote;
-                  }
-                }
-              }
+              
+              // Use the class to save
+              $tcReflection = new ReflectionClass($tc);
+              $storedProp = $tcReflection->getProperty('stored');
+              $storedProp->setAccessible(true);
+              $storedProp->setValue($tc, $newStore);
+              
+              // Recalculate next event based on new schedule
+              $tc->findNext();
+              $tc->saveStored();
+              
+              // Update cron job based on system flag
+              $systemEnabled = property_exists($newStore, 'system') && $newStore->system === true;
+              updateCronJob($systemEnabled);
             }
-          }          
-          if (property_exists($stored,'nextEventTime')) {
-            @$newStore->nextEventTime = $stored->nextEventTime;
-          }
-          if (property_exists($stored,'nextEventIndex')) {
-            @$newStore->nextEventIndex = $stored->nextEventIndex;
-          }
-          file_put_contents(PERSISTENTFILE . '_temp', json_encode($newStore, JSON_PRETTY_PRINT));
-          if (file_exists(PERSISTENTFILE . '_temp') &&
-              property_exists(json_decode(file_get_contents(PERSISTENTFILE . '_temp')), 'list')) {
-            rename(PERSISTENTFILE . '_temp', PERSISTENTFILE);
-            chmod(PERSISTENTFILE, 0664);        
-          } else {
-            unlink(PERSISTENTFILE . '_temp');
-            http_response_code(507);
-            trigger_error('Attempt to write new playlist file failed', E_USER_ERROR);
-            die('Attempt to write new playlist file failed');              
-          }
+            $tc->releaseLock('store');
+            break;
+          #Load settings and send to client. Use default if none yet stored.
+          case 'load':
+            $tc->getLock('load');
+            $stored = $tc->loadStored();
+            echo json_encode($stored, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+            $tc->releaseLock('load');
+            break;
+          #Return default settings to client
+          case 'defaults':
+            if (file_exists(PERSISTENTFILEDEFAULT)) {
+              echo file_get_contents(PERSISTENTFILEDEFAULT);
+            }
+            break;
+          #Is client on LAN or WAN? If system directory not writable then treat as WAN anyway.
+          case 'lan':
+            echo (clientInSameSubnet() && sys_writable())?'lan':'wan';
+            break;
+          #List files in directory
+          case 'listFiles':
+            $phash = $_REQUEST['phash'] ?? '';
+            if (!preg_match('/^[a-zA-Z0-9_]+$/', $phash)) {
+                echo json_encode([]);
+                break;
+            }
+            echo json_encode(listFiles ($phash), JSON_PRETTY_PRINT);
+            break;
+          #Play a song
+          case 'play':
+            if (!clientInSameSubnet()) {
+              http_response_code(403);
+              die('Can not play song from WAN');
+            }
+            checkOsCommands ();
+            if (isset($_REQUEST['index'])) {
+              $index = $_REQUEST['index'];
+              $tc->getLock('play');
+              $tc->loadStored();
+              playEntry ($index);
+              $tc->saveStored();
+              $tc->releaseLock('play');
+            }
+            break;
+          case 'stop':
+            if (!clientInSameSubnet()) {
+              http_response_code(403);
+              die('Can not stop song from WAN');
+            }
+            checkOsCommands ();
+            stopPlayer();
+            break;
+          case 'next':
+            if (!clientInSameSubnet()) {
+              http_response_code(403);
+              die('Can not find next remote track from WAN');
+            }
+            checkOsCommands ();
+            $tc->getLock('next');
+            $tc->loadStored();
+            $tc->findNext();
+            $tc->saveStored();
+            $tc->releaseLock('next');
+            break;
+          case 'bankhols':
+            echo json_encode(calculateBankHolidays(date('Y')));
+            break;
+          case 'listSounds':
+            $oldErrorLevel = error_reporting(E_ERROR | E_PARSE);
+            $phash = isset($_REQUEST['phash']) ? $_REQUEST['phash'] : '';
+            echo json_encode(listAllSounds($phash), JSON_PRETTY_PRINT);
+            error_reporting($oldErrorLevel);
+            break;
+          case 'createFolder':
+            if (!clientInSameSubnet()) {
+              http_response_code(403);
+              die(json_encode(['error' => 'Not allowed from WAN']));
+            }
+            $path = isset($_REQUEST['path']) ? $_REQUEST['path'] : '';
+            $name = isset($_REQUEST['name']) ? $_REQUEST['name'] : '';
+            echo json_encode(createFolder($path, $name));
+            break;
+          case 'deleteItem':
+            if (!clientInSameSubnet()) {
+              http_response_code(403);
+              die(json_encode(['error' => 'Not allowed from WAN']));
+            }
+            $path = isset($_REQUEST['path']) ? $_REQUEST['path'] : '';
+            echo json_encode(deleteItem($path));
+            break;
+          case 'renameItem':
+            if (!clientInSameSubnet()) {
+              http_response_code(403);
+              die(json_encode(['error' => 'Not allowed from WAN']));
+            }
+            $path = isset($_REQUEST['path']) ? $_REQUEST['path'] : '';
+            $newName = isset($_REQUEST['newName']) ? $_REQUEST['newName'] : '';
+            echo json_encode(renameItem($path, $newName));
+            break;
+          case 'uploadFile':
+            if (!clientInSameSubnet()) {
+              http_response_code(403);
+              die(json_encode(['error' => 'Not allowed from WAN']));
+            }
+            $path = isset($_REQUEST['path']) ? $_REQUEST['path'] : '';
+            echo json_encode(uploadFiles($path, $_FILES));
+            break;
+          case 'time':
+            $tc->loadStored();
+            echo json_encode([date("F j, Y, g:i a", time ()), date_default_timezone_get ()]);
+            break;
+          case 'audioDevices':
+            echo json_encode(getAudioDevices());
+            break;
+          case 'setAudioDevice':
+            if (!clientInSameSubnet()) {
+              http_response_code(403);
+              die(json_encode(['error' => 'Not allowed from WAN']));
+            }
+            $deviceId = isset($_REQUEST['device']) ? $_REQUEST['device'] : 'auto';
+            $tc->getLock('setAudioDevice');
+            $stored = $tc->loadStored();
+            $stored->audioDevice = $deviceId;
+            $tcReflection = new ReflectionClass($tc);
+            $storedProp = $tcReflection->getProperty('stored');
+            $storedProp->setAccessible(true);
+            $storedProp->setValue($tc, $stored);
+            $tc->saveStored();
+            $tc->releaseLock('setAudioDevice');
+            echo json_encode(['success' => true, 'device' => $deviceId]);
+            break;
+          case 'getAudioDevice':
+            $tc->loadStored();
+            $selected = getSelectedAudioDevice();
+            $resolved = resolveAudioDevice($selected);
+            echo json_encode(['device' => $resolved]);
+            break;
+          case 'factoryreset':
+            if (!clientInSameSubnet() || !sys_writable()) {
+              die('Factory reset denied');
+            }
+            $tc->getLock('factoryreset');
+            @unlink(PERSISTENTFILE);
+            @unlink(PLAYLOG);
+            @unlink(DEBUGLOG);
+            $tc->releaseLock('factoryreset');
+            die('Factory reset done');
+            break;
+          case 'update':
+            if (!clientInSameSubnet() || !sys_writable()) {
+              die('Software update denied');
+            }
+            checkOsCommands ();
+            $rootDir = escapeshellarg(ROOTDIR);
+            $debugLog = escapeshellarg(DEBUGLOG);
+            shell_exec("(cd $rootDir && pwd && svn up) > $debugLog 2>&1 &");
+            die('<p>Update requested. Result can be viewed <a href="../.tcsys/debug.log">here</a></p>');
+            break;
         }
-        yield_lock('store');
-        break;
-      #Load settings and send to client. Use default if none yet stored.
-      case 'load':
-        if (!clientInSameSubnet()) {
-          //Not on LAN so don't allow saving
-          http_response_code(403);
-          die('Can not load from WAN');
-        }
-        checkOsCommands ();
-        get_lock('load');
-        if (file_exists(PERSISTENTFILE)) {
-          echo file_get_contents(PERSISTENTFILE);
-        } else {
-          if (file_exists(PERSISTENTFILEDEFAULT)) {
-            echo file_get_contents(PERSISTENTFILEDEFAULT);
-          } else {
-            echo '';
-          }
-        }
-        yield_lock('load');
-        break;
-      #Return default settings to client
-      case 'defaults':
-        if (file_exists(PERSISTENTFILEDEFAULT)) {
-          echo file_get_contents(PERSISTENTFILEDEFAULT);
-        }
-        break;
-      #Is client on LAN or WAN? If system directory not writable then treat as WAN anyway.
-      case 'lan':
-        echo (clientInSameSubnet() && sys_writable())?'lan':'wan';
-        break;
-      #List files in directory
-      case 'listFiles':
-        echo json_encode(listFiles ($_REQUEST['phash']), JSON_PRETTY_PRINT);
-        break;
-      #Play a song
-      case 'play':
-        if (!clientInSameSubnet()) {
-          //Not on LAN so don't allow saving
-          http_response_code(403);
-          die('Can not play song from WAN');
-        }
-        checkOsCommands ();
-        if (isset($_REQUEST['index'])) {
-          $index = $_REQUEST['index'];
-          
-          get_lock('play');
-          get_stored ();
-          playEntry ($index);
-          put_stored();
-          yield_lock('play');
-        }
-        break;
-      case 'stop':
-        if (!clientInSameSubnet()) {
-          //Not on LAN so don't allow saving
-          http_response_code(403);
-          die('Can not stop song from WAN');
-        }
-        checkOsCommands ();
-        stopPlayer();
-        break;
-      case 'next':
-        if (!clientInSameSubnet()) {
-          //Not on LAN so don't allow saving
-          http_response_code(403);
-          die('Can not find next remote track from WAN');
-        }
-        checkOsCommands ();
-        get_lock('next');
-        get_stored ();
-        find_next();
-        put_stored();
-        yield_lock('next');
-        break;
-      case 'bankhols':
-        echo json_encode(calculateBankHolidays(date('Y')));
-        break;
-      case 'time':
-        get_stored();
-        echo json_encode([date("F j, Y, g:i a", time ()), date_default_timezone_get ()]);
-        break;
-      case 'factoryreset':
-        if (!clientInSameSubnet() || !sys_writable()) {
-          die('Factory reset denied');
-        }
-        get_lock('factoryreset');
-        @unlink(PERSISTENTFILE);
-        @unlink(PLAYLOG);
-        @unlink(DEBUGLOG);
-        yield_lock('factoryreset');
-        die('Factory reset done');
-        break;
-      case 'update':
-        if (!clientInSameSubnet() || !sys_writable()) {
-          die('Software update denied');
-        }
-        checkOsCommands ();
-        $rootDir = escapeshellarg(ROOTDIR);
-        $debugLog = escapeshellarg(DEBUGLOG);
-        shell_exec("(cd $rootDir && pwd && svn up) > $debugLog 2>&1 &");
-        die('<p>Update requested. Result can be viewed <a href="../.tcsys/debug.log">here</a></p>');
-        break;
+    } catch (Exception $e) {
+        errorLog($e);
+        http_response_code(500);
+        die($e->getMessage());
     }
   }
-  if ($locked) {
-    yield_lock('hanging lock');
+  if ($tc) {
+    $tc->releaseLock('hanging lock');
   }

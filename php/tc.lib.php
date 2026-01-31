@@ -15,7 +15,19 @@
   define ( 'CHIME_END', '.system/Chime_end.flac');
   define ( 'DB_PER_VOL_UNIT', 0.46 );
   define ( 'OS_COMMANDS', 'svn|bc|amixer|mplayer');
-  define ( 'CARD_NUM', exec('[ -f /proc/asound/cards ] && grep -F -v "HDMI" /proc/asound/cards | grep -P -o "^[[:space:]]+[0-9]+[[:space:]]+\[" | head -n 1 | tr -dc "0-9" || echo "-1"'));
+  define ( 'CARD_NUM', (function() {
+    $aplayOutput = [];
+    @exec('aplay -l 2>/dev/null', $aplayOutput);
+    foreach ($aplayOutput as $line) {
+        if (preg_match('/^card (\d+):.*device 0:/', $line, $matches)) {
+            $cardNum = intval($matches[1]);
+            if (strpos($line, 'HDMI') === false) {
+                return $cardNum;
+            }
+        }
+    }
+    return -1;
+  })());
 
   //This may be changed by some functions but must be set now
   //to prevent warnings
@@ -44,29 +56,39 @@
   function get_lock ($fromWhere) {
     global $locked;
     
-    $forced = "";
-    
     if (! sys_writable() ) {
       http_response_code(403);
       die('Local system directory, ' . SYSTEMDIR . ', is not writable');
     }
-    while (!@mkdir(PERSISTENTLOCK)) {
-      if ((time() - filemtime(PERSISTENTLOCK)) > LOCKTIMEOUT) {
-        @rmdir(PERSISTENTLOCK);
-        $forced = " (forced)";
-      } else {
-        sleep(1);
-      }
+
+    $lockFile = fopen(PERSISTENTLOCK, 'c');
+    if (!$lockFile) {
+        http_response_code(500);
+        die('Could not create lock file');
     }
-    $locked = true;
-    debugLog("Got lock from " . $fromWhere . $forced  .  " at " . date("Y-m-d h:i:sa"));
+
+    $startTime = time();
+    while (!flock($lockFile, LOCK_EX | LOCK_NB)) {
+        if (time() - $startTime > LOCKTIMEOUT) {
+            fclose($lockFile);
+            http_response_code(503);
+            die('Lock timeout');
+        }
+        usleep(250000); // 250ms
+    }
+
+    $locked = $lockFile;
+    debugLog("Got lock from " . $fromWhere . " at " . date("Y-m-d h:i:sa"));
   }
 
   function yield_lock ($fromWhere) {
     global $locked;
     
-    @rmdir(PERSISTENTLOCK);
-    $locked = false;
+    if ($locked) {
+        flock($locked, LOCK_UN);
+        fclose($locked);
+        $locked = false;
+    }
     debugLog("Released lock from " . $fromWhere . " at " . date("Y-m-d h:i:sa"));
   }
 
@@ -318,13 +340,14 @@ function calculateBankHolidays($yr) {
       trigger_error('Tried to write corrupt playlist', E_USER_ERROR);
       die('Tried to write corrupt playlist');
     }
-    file_put_contents(PERSISTENTFILE . '_temp', json_encode($stored, JSON_PRETTY_PRINT));
-    if (file_exists(PERSISTENTFILE . '_temp') &&
-        property_exists(json_decode(file_get_contents(PERSISTENTFILE . '_temp')), 'list')) {
-      rename(PERSISTENTFILE . '_temp', PERSISTENTFILE);
+    $json = json_encode($stored, JSON_PRETTY_PRINT);
+    if ($json === false) {
+        http_response_code(500);
+        die('JSON encoding failed');
+    }
+    if (file_put_contents(PERSISTENTFILE, $json, LOCK_EX) !== false) {
       chmod(PERSISTENTFILE, 0664);
     } else {
-      unlink(PERSISTENTFILE . '_temp');
       http_response_code(507);
       trigger_error('Attempt to write new playlist file failed', E_USER_ERROR);
       die('Attempt to write new playlist file failed');
@@ -343,14 +366,182 @@ function calculateBankHolidays($yr) {
     return $levelDb;
   }
   
+  function getAudioDevices() {
+    $devices = [];
+    
+    // Scan ALSA cards from /proc/asound/cards
+    $cards = @file_get_contents('/proc/asound/cards');
+    if ($cards !== false) {
+      $lines = explode("\n", $cards);
+      foreach ($lines as $line) {
+        if (preg_match('/^\s*(\d+)\s+\[([^\]]+)\]:\s+(.+)$/', $line, $matches)) {
+          $cardNum = intval($matches[1]);
+          $cardId = trim($matches[2]);
+          $cardName = trim($matches[3]);
+          $devices[] = [
+            'id' => 'alsa:' . $cardId,
+            'type' => 'alsa',
+            'cardNum' => $cardNum,
+            'cardId' => $cardId,
+            'name' => $cardName,
+            'displayName' => $cardName . ' (Card ' . $cardNum . ')'
+          ];
+        }
+      }
+    }
+    
+    // Scan Bluetooth devices via bluetoothctl
+    $btLines = [];
+    @exec('command -v bluetoothctl >/dev/null 2>&1 && bluetoothctl devices Connected 2>/dev/null', $btLines);
+    if (!empty($btLines)) {
+      foreach ($btLines as $btLine) {
+        if (preg_match('/^Device\s+([0-9A-F:]+)\s+(.+)$/i', trim($btLine), $btMatches)) {
+          $macAddr = $btMatches[1];
+          $btName = trim($btMatches[2]);
+          $devices[] = [
+            'id' => 'bluetooth:' . $macAddr,
+            'type' => 'bluetooth',
+            'mac' => $macAddr,
+            'name' => $btName,
+            'displayName' => $btName . ' (Bluetooth)'
+          ];
+        }
+      }
+    }
+    
+    // Check for bluealsa as fallback bluetooth detection
+    if (empty(array_filter($devices, fn($d) => $d['type'] === 'bluetooth'))) {
+      $bluealsaCheck = @exec('which bluealsa-aplay >/dev/null 2>&1 && bluealsa-aplay -L 2>/dev/null | grep -Eo "^[0-9A-F:]+\\s" | head -1');
+      if (!empty($bluealsaCheck)) {
+        $devices[] = [
+          'id' => 'bluetooth:bluealsa',
+          'type' => 'bluetooth',
+          'mac' => 'bluealsa',
+          'name' => 'Bluetooth Audio',
+          'displayName' => 'Bluetooth Audio (BlueALSA)'
+        ];
+      }
+    }
+    
+    // Add auto-detect option at the beginning
+    array_unshift($devices, [
+      'id' => 'auto',
+      'type' => 'auto',
+      'name' => 'Auto-detect',
+      'displayName' => 'Auto-detect (default)'
+    ]);
+    
+    return $devices;
+  }
+  
+  function getSelectedAudioDevice() {
+    global $stored;
+    if (isset($stored) && is_object($stored) && property_exists($stored, 'audioDevice')) {
+      return $stored->audioDevice;
+    }
+    return 'auto';
+  }
+  
+  function resolveAudioDevice($selectedDevice) {
+    if ($selectedDevice === 'auto') {
+      return 'auto';
+    }
+    $devices = getAudioDevices();
+    foreach ($devices as $device) {
+      if (isset($device['id']) && $device['id'] === $selectedDevice) {
+        return $selectedDevice;
+      }
+    }
+    // Backward compatibility: map numeric card id to cardId
+    if (strpos($selectedDevice, 'alsa:') === 0) {
+      $maybeNum = substr($selectedDevice, 5);
+      if (ctype_digit($maybeNum)) {
+        foreach ($devices as $device) {
+          if (isset($device['cardNum']) && (string)$device['cardNum'] === $maybeNum && isset($device['cardId'])) {
+            return 'alsa:' . $device['cardId'];
+          }
+        }
+      }
+    }
+    return 'auto';
+  }
+
   function getDevCardInfo() {
-    // Get the best candidate for sound card
+    global $stored;
+    
+    $selectedDevice = (isset($stored) && is_object($stored) && property_exists($stored, 'audioDevice')) 
+                      ? $stored->audioDevice : 'auto';
+    $selectedDevice = resolveAudioDevice($selectedDevice);
+    
+    // Handle explicit device selection
+    if ($selectedDevice !== 'auto') {
+      if (strpos($selectedDevice, 'alsa:') === 0) {
+        $cardId = substr($selectedDevice, 5);
+        $cardId = preg_replace('/[^A-Za-z0-9_]/', '', $cardId);
+        if ($cardId !== '') {
+          return "-c " . $cardId;
+        }
+      }
+      if (strpos($selectedDevice, 'bluetooth:') === 0) {
+        return ' -D bluealsa';
+      }
+    }
+    
+    // Auto-detect: prefer non-HDMI ALSA card, fallback to bluetooth
     if (CARD_NUM != -1) {
-      $devCardInfo = "-c " . escapeshellarg(CARD_NUM);
+      $cards = @file_get_contents('/proc/asound/cards');
+      if ($cards !== false && preg_match('/^\s*' . CARD_NUM . '\s+\[([^\]]+)\]/m', $cards, $matches)) {
+        $cardId = preg_replace('/[^A-Za-z0-9_]/', '', trim($matches[1]));
+        $devCardInfo = ($cardId !== '') ? "-c " . $cardId : "-c " . CARD_NUM;
+      } else {
+        $devCardInfo = "-c " . CARD_NUM;
+      }
     } else {
       $devCardInfo = (@exec( 'which bluealsa-aplay >/dev/null && bluealsa-aplay -L | grep -Fo headset' ) === 'headset')?' -D bluealsa':'';
     }
     return $devCardInfo;
+  }
+  
+  function getMplayerAudioOutput() {
+    global $stored;
+    
+    $selectedDevice = (isset($stored) && is_object($stored) && property_exists($stored, 'audioDevice')) 
+                      ? $stored->audioDevice : 'auto';
+    $selectedDevice = resolveAudioDevice($selectedDevice);
+    
+    // Check if PulseAudio/PipeWire is available
+    $hasPulse = false;
+    $xdgRuntime = getenv('XDG_RUNTIME_DIR');
+    if ($xdgRuntime && (file_exists("$xdgRuntime/pulse/native") || file_exists("$xdgRuntime/pipewire-0"))) {
+      // Check if we can actually access it (same uid)
+      $runtimeStat = @stat($xdgRuntime);
+      if ($runtimeStat && $runtimeStat['uid'] === posix_getuid()) {
+        $hasPulse = true;
+      }
+    }
+    
+    if ($hasPulse) {
+      return '-ao pulse';
+    }
+    
+    // Fall back to ALSA with plughw (allows software mixing, works alongside PipeWire)
+    if ($selectedDevice !== 'auto' && strpos($selectedDevice, 'alsa:') === 0) {
+      $cardId = substr($selectedDevice, 5);
+      return '-ao alsa:device=plughw=' . $cardId . '.0';
+    }
+    
+    // Auto-detect ALSA card
+    if (CARD_NUM >= 0) {
+      $cards = @file_get_contents('/proc/asound/cards');
+      if ($cards !== false && preg_match('/^\s*' . CARD_NUM . '\s+\[([^\]]+)\]/m', $cards, $matches)) {
+        $cardId = trim($matches[1]);
+        return '-ao alsa:device=plughw=' . $cardId . '.0';
+      }
+      return '-ao alsa:device=plughw=' . CARD_NUM . '.0';
+    }
+    
+    // Last resort - let mplayer auto-detect
+    return '';
   }
   function getIsMapped() {
     $devCardInfo = getDevCardInfo();
@@ -383,7 +574,7 @@ function calculateBankHolidays($yr) {
     debugLog("devCardInfo :" . $devCardInfo . ", controlId : " . $controlId . ", Current level : " . $level . ", is mapped : " . $isMapped);
   }
 
-  function setPlayerVolumeAndLength ($index, $setLength, $id, $oldId, $chime, $alsa, $blue) {
+  function setPlayerVolumeAndLength ($index, $setLength, $id, $oldId, $chime, $audioOutput, $unused = '') {
     global $stored;
 
     $item = $stored->list[ $stored->selectedPlayList ]->list[$index];
@@ -430,7 +621,7 @@ function calculateBankHolidays($yr) {
           $command = "(  sleep $howLong\n";
           if ($chime) {
             $chimeEnd = escapeshellarg(PLAYLISTDIR . '/' . CHIME_END);
-            $command .= "mplayer $chimeEnd $alsa $blue -vo null";
+            $command .= "mplayer $chimeEnd $audioOutput -vo null";
           } else {
             //dash/bash script to wait for end to music then start fade then kill the music
             //Do not act if different id playing at time of end of song
@@ -467,6 +658,234 @@ function calculateBankHolidays($yr) {
 
   function fileIsAudio ($file) {
     return (strpos($file['mime'], 'audio') !== false);
+  }
+
+  function listAllSounds($phash = '') {
+    static $elFinder = null;
+
+    if ($elFinder === null) {
+      include_once ELFINDERPHP.'elFinder.class.php';
+      include_once ELFINDERPHP.'elFinderVolumeDriver.class.php';
+      include_once ELFINDERPHP.'elFinderVolumeLocalFileSystem.class.php';
+
+      $opts = array(
+        'roots' => array(
+          array(
+            'driver'        => 'LocalFileSystem',
+            'path'          => PLAYLISTDIR . '/',
+            'accessControl' => 'access'
+          )
+        )
+      );
+      $elFinder = new elFinder($opts);
+    }
+
+    $sounds = array();
+    
+    if (empty($phash)) {
+      $sounds[] = array('path' => 'Chime', 'name' => 'Chime', 'hash' => '', 'mime' => 'audio/chime');
+      $result = $elFinder->exec('open', array('target' => '', 'tree' => false, 'init' => true));
+      $currentPath = '';
+    } else {
+      if (!preg_match('/^[a-zA-Z0-9_]+$/', $phash)) {
+        return $sounds;
+      }
+      $result = $elFinder->exec('open', array('target' => $phash, 'tree' => false, 'init' => false));
+      $currentPath = '';
+      if (isset($result['cwd']['name'])) {
+        $currentPath = $result['cwd']['name'];
+      }
+    }
+    
+    if (isset($result['files'])) {
+      foreach ($result['files'] as $file) {
+        if (!isset($file['name']) || strpos($file['name'], '.') === 0) continue;
+        if (!empty($phash) && isset($file['phash']) && $file['phash'] !== $phash) continue;
+        
+        $isDir = (isset($file['mime']) && $file['mime'] === 'directory');
+        $isAudio = (isset($file['mime']) && strpos($file['mime'], 'audio') !== false);
+        
+        if ($isDir || $isAudio) {
+          $name = $file['name'];
+          $path = empty($currentPath) ? $name : $currentPath . '/' . $name;
+          $sounds[] = array(
+            'path' => $path,
+            'name' => $name,
+            'hash' => isset($file['hash']) ? $file['hash'] : '',
+            'mime' => isset($file['mime']) ? $file['mime'] : ''
+          );
+        }
+      }
+    }
+    
+    usort($sounds, function($a, $b) {
+      if ($a['path'] === 'Chime') return -1;
+      if ($b['path'] === 'Chime') return 1;
+      $aIsDir = ($a['mime'] === 'directory');
+      $bIsDir = ($b['mime'] === 'directory');
+      if ($aIsDir && !$bIsDir) return -1;
+      if (!$aIsDir && $bIsDir) return 1;
+      return strcasecmp($a['name'], $b['name']);
+    });
+    
+    return $sounds;
+  }
+
+  function sanitizePath($path) {
+    $path = str_replace(['..', "\0"], '', $path);
+    $path = preg_replace('/[\/\\\\]+/', '/', $path);
+    $path = trim($path, '/');
+    return $path;
+  }
+
+  function getFullPath($relativePath) {
+    $relativePath = sanitizePath($relativePath);
+    $fullPath = PLAYLISTDIR . '/' . $relativePath;
+    $realPath = realpath(dirname($fullPath));
+    if ($realPath === false || strpos($realPath, realpath(PLAYLISTDIR)) !== 0) {
+      return false;
+    }
+    return $fullPath;
+  }
+
+  function createFolder($currentPath, $name) {
+    $name = sanitizePath($name);
+    if (empty($name)) {
+      return ['error' => 'Folder name is required'];
+    }
+    $currentPath = sanitizePath($currentPath);
+    $fullPath = PLAYLISTDIR . '/' . ($currentPath ? $currentPath . '/' : '') . $name;
+    
+    $parentReal = realpath(PLAYLISTDIR . '/' . $currentPath);
+    if ($parentReal === false || strpos($parentReal, realpath(PLAYLISTDIR)) !== 0) {
+      return ['error' => 'Invalid path'];
+    }
+    
+    if (file_exists($fullPath)) {
+      return ['error' => 'Folder already exists'];
+    }
+    
+    if (mkdir($fullPath, 0755, true)) {
+      return ['success' => true];
+    }
+    return ['error' => 'Failed to create folder'];
+  }
+
+  function deleteItem($path) {
+    $path = sanitizePath($path);
+    if (empty($path)) {
+      return ['error' => 'Path is required'];
+    }
+    $fullPath = PLAYLISTDIR . '/' . $path;
+    $realPath = realpath($fullPath);
+    
+    if ($realPath === false || strpos($realPath, realpath(PLAYLISTDIR)) !== 0) {
+      return ['error' => 'Invalid path'];
+    }
+    if ($realPath === realpath(PLAYLISTDIR)) {
+      return ['error' => 'Cannot delete root folder'];
+    }
+    
+    if (is_dir($realPath)) {
+      $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($realPath, RecursiveDirectoryIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::CHILD_FIRST
+      );
+      foreach ($iterator as $file) {
+        if ($file->isDir()) {
+          rmdir($file->getPathname());
+        } else {
+          unlink($file->getPathname());
+        }
+      }
+      if (rmdir($realPath)) {
+        return ['success' => true];
+      }
+    } else {
+      if (unlink($realPath)) {
+        return ['success' => true];
+      }
+    }
+    return ['error' => 'Failed to delete'];
+  }
+
+  function renameItem($path, $newName) {
+    $path = sanitizePath($path);
+    $newName = sanitizePath($newName);
+    if (empty($path) || empty($newName)) {
+      return ['error' => 'Path and new name are required'];
+    }
+    
+    $fullPath = PLAYLISTDIR . '/' . $path;
+    $realPath = realpath($fullPath);
+    
+    if ($realPath === false || strpos($realPath, realpath(PLAYLISTDIR)) !== 0) {
+      return ['error' => 'Invalid path'];
+    }
+    if ($realPath === realpath(PLAYLISTDIR)) {
+      return ['error' => 'Cannot rename root folder'];
+    }
+    
+    $parentDir = dirname($realPath);
+    $newPath = $parentDir . '/' . basename($newName);
+    
+    if (file_exists($newPath)) {
+      return ['error' => 'A file with that name already exists'];
+    }
+    
+    if (rename($realPath, $newPath)) {
+      return ['success' => true];
+    }
+    return ['error' => 'Failed to rename'];
+  }
+
+  function uploadFiles($currentPath, $files) {
+    $currentPath = sanitizePath($currentPath);
+    $targetDir = PLAYLISTDIR . '/' . $currentPath;
+    
+    $realTargetDir = realpath($targetDir);
+    if ($realTargetDir === false) {
+      $realTargetDir = realpath(PLAYLISTDIR);
+      $targetDir = PLAYLISTDIR;
+    }
+    if (strpos($realTargetDir, realpath(PLAYLISTDIR)) !== 0) {
+      return ['error' => 'Invalid path'];
+    }
+    
+    $uploaded = 0;
+    $errors = [];
+    $audioMimes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/flac', 'audio/ogg', 'audio/m4a', 'audio/aac', 'audio/x-m4a'];
+    
+    if (isset($files['files'])) {
+      $fileCount = count($files['files']['name']);
+      for ($i = 0; $i < $fileCount; $i++) {
+        if ($files['files']['error'][$i] === UPLOAD_ERR_OK) {
+          $tmpName = $files['files']['tmp_name'][$i];
+          $name = basename($files['files']['name'][$i]);
+          $mime = mime_content_type($tmpName);
+          
+          if (!in_array($mime, $audioMimes) && strpos($mime, 'audio/') !== 0) {
+            $errors[] = "$name: Not an audio file";
+            continue;
+          }
+          
+          $name = preg_replace('/[^\w\s\-\.\(\)]/', '_', $name);
+          $targetPath = $targetDir . '/' . $name;
+          
+          if (move_uploaded_file($tmpName, $targetPath)) {
+            chmod($targetPath, 0644);
+            $uploaded++;
+          } else {
+            $errors[] = "$name: Upload failed";
+          }
+        }
+      }
+    }
+    
+    if ($uploaded > 0) {
+      return ['success' => true, 'uploaded' => $uploaded, 'errors' => $errors];
+    }
+    return ['error' => 'No files uploaded', 'errors' => $errors];
   }
 
   function listFiles ($phash) {
@@ -656,16 +1075,17 @@ function calculateBankHolidays($yr) {
     if (strlen($oldId) > 1) {
       @exec( 'kill $( ps aux | grep -F -v grep | grep -F mplayer | awk \'{print $2}\' )' );
     }
-    $blue = (@exec( 'which bluealsa-aplay >/dev/null && bluealsa-aplay -L | grep -Fo headset' ) === 'headset')?' -ao alsa:device=bluealsa':'';
-    $alsa = (CARD_NUM > 0)?'-ao alsa:device=hw=' . escapeshellarg(CARD_NUM):'';
+    $audioOutput = getMplayerAudioOutput();
     $chime = str_ends_with($entry->whatSelectedRemote, CHIME_START);
-    $id = setPlayerVolumeAndLength($index, true, $id, $oldId, $chime, $alsa, $blue);
+    $id = setPlayerVolumeAndLength($index, true, $id, $oldId, $chime, $audioOutput, '');
     //mplayer plays just about anything and is available on Rapberry Pi
     $mplayerPath = escapeshellarg(PLAYLISTDIR . '/' . $entry->whatSelectedRemote);
     $sid = escapeshellarg(explode("-", "$id")[0]);
     $xid = escapeshellarg(explode("-", "$id")[1]);
-    exec( "mplayer $mplayerPath $alsa $blue -vo null -sid $sid -x $xid >/dev/null 2>&1 &");
-    debugLog("mplayer $mplayerPath $alsa $blue -vo null -sid $sid -x $xid");
+    // Use nohup and setsid to fully detach from parent process
+    $mplayerCmd = "nohup setsid mplayer $mplayerPath $audioOutput -vo null -sid $sid -x $xid >/dev/null 2>&1 </dev/null &";
+    exec($mplayerCmd);
+    debugLog($mplayerCmd);
     $played = $entry->whatSelectedRemote;
 
     if ($entry->mime === 'directory') {
@@ -716,5 +1136,19 @@ function calculateBankHolidays($yr) {
   function errorLog(Throwable $e) {
     $logEntry = 'File : ' . $e->getFile() . ', Line : ' . $e->getLine() . ', Message : ' . $e->getMessage() . "\n";
     file_put_contents(DEBUGLOG, $logEntry, FILE_APPEND);
+  }
+  
+  function updateCronJob($enabled) {
+    $flagFile = SYSTEMDIR . '/scheduler_enabled';
+    
+    if ($enabled) {
+      file_put_contents($flagFile, date('c'));
+      chmod($flagFile, 0664);
+      debugLog("Scheduler enabled");
+    } else {
+      @unlink($flagFile);
+      debugLog("Scheduler disabled");
+    }
+    return true;
   }
 ?>

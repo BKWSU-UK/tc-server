@@ -3,46 +3,237 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Brahma Kumaris Traffic Control</title>
+    <title>About - Brahma Kumaris Traffic Control</title>
     <meta name="description" content="About the Brahma Kumaris online Traffic Control system">
     <meta name="keywords" content="Brahma Kumaris,Traffic Control,online,more about" />
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link href="css/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+      :root {
+        --primary-color: #5e35b1;
+        --primary-light: #7e57c2;
+        --primary-dark: #4527a0;
+        --bg-light: #f5f7fa;
+        --text-primary: #2d3436;
+        --text-secondary: #636e72;
+        --radius-lg: 1rem;
+        --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+        --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
+      }
+      
+      body {
+        font-family: 'Inter', 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+        background-color: var(--bg-light);
+        color: var(--text-primary);
+        line-height: 1.7;
+      }
+      
+      .navbar {
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+      }
+      
+      .navbar-brand {
+        font-weight: 700;
+        letter-spacing: -0.5px;
+      }
+      
+      .card {
+        border-radius: var(--radius-lg);
+        border: none;
+        box-shadow: var(--shadow-sm);
+        transition: box-shadow 0.25s ease;
+      }
+      
+      .card:hover {
+        box-shadow: var(--shadow-md);
+      }
+      
+      h1 {
+        color: var(--primary-color);
+        font-weight: 700;
+        margin-bottom: 1.5rem;
+      }
+      
+      h2 {
+        color: var(--text-primary);
+        font-weight: 600;
+        font-size: 1.5rem;
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid var(--primary-light);
+      }
+      
+      h3 {
+        color: var(--text-secondary);
+        font-weight: 600;
+        font-size: 1.15rem;
+        margin-top: 1.5rem;
+        margin-bottom: 0.75rem;
+      }
+      
+      p {
+        color: var(--text-secondary);
+        margin-bottom: 1rem;
+      }
+      
+      a {
+        color: var(--primary-color);
+        text-decoration: none;
+        transition: color 0.2s ease;
+      }
+      
+      a:hover {
+        color: var(--primary-light);
+        text-decoration: underline;
+      }
+      
+      ul {
+        padding-left: 1.5rem;
+      }
+      
+      li {
+        color: var(--text-secondary);
+        margin-bottom: 0.5rem;
+      }
+      
+      li a {
+        font-weight: 500;
+      }
+      
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 500;
+        margin-bottom: 1.5rem;
+      }
+      
+      .back-link:hover {
+        text-decoration: none;
+      }
+      
+      .feature-icon {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+        flex-shrink: 0;
+      }
+      
+      .mode-card {
+        background: white;
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        box-shadow: var(--shadow-sm);
+        display: flex;
+        gap: 1rem;
+        align-items: flex-start;
+      }
+      
+      .mode-card h3 {
+        margin: 0 0 0.5rem 0;
+        color: var(--text-primary);
+      }
+      
+      .mode-card p {
+        margin: 0;
+        font-size: 0.95rem;
+      }
+      
+      footer {
+        margin-top: 3rem;
+        padding: 2rem 0;
+        text-align: center;
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+      }
+    </style>
   </head>
   <body>
-    <div class="main">
-      <h1 class="titleBlock">Brahma Kumaris Traffic Control</h1>
-      <h2>About this application</h2>
-      <p>The Brahma Kumaris system of "Traffic Control" is a mental excersise practiced throughout the day at various times to stop all the traffic of thoughts on cue, as if presented with a red traffic light signal.
-      Reminders to do this are broadcast through the main Brahma Kumaris centres by playing some soft music or an old Hindi song over a PA system at the designated times. Implementing such as system
-      used to be hard work when the only technology available was a cassette recorder and a timer, or someone to press "play". Fortunately, the widespread availibilty of computers and smart devices
-      has made Implementing Traffic Control very simple.</p>
-      <p>This system is works in two ways. Firstly it runs as you see it, in a desktop web browser and secondly it is possible to install it on a <a href="https://www.raspberrypi.org/">Raspberry Pi</a> device
-      to run continuously in, say, a centre using <a href="https://drive.google.com/drive/folders/0B4piTloTCvuVUTA2X295WWdzOTQ?usp=sharing">this modified Raspberry Pi image</a>.</p>
-      <h2>Web browser mode</h2>
-      <p>When this website is accessed by a desktop web browser it will automatically play the Traffic Control music as long as the desktop computer remains awake and the Traffic Control web page is open. Unfortunately, this website won't work on mobile devices because it is not possible for a website to start playing music automatically. If you wish to play Traffic Control music on your mobile device then see some of the options below for Android and Apple devices.</p>
-      <h2>Raspberry Pi mode</h2>
-      <p>When the application is running on a Raspberry Pi, it is accessed on the same network using the URL, http://tcpi. Extra controls are visible to control whether the music plays on the Raspberry Pi or through the web browser accessing the Raspberry Pi. Also the library of music can be added to by uploading your own music.</p>
-      <h2>Other systems</h2>
-      <p>There is a difference in style between systems originating in India and outside India. In India exactly the same song is played at the same time of day. The hourly song, the "Drill", is also always
-      the same song. In other countries the words of the songs are not understood and so there is more preference for quiet and varied music with less repetition. Some centres mix traditional songs with
-      varied music for, say, the hourly drill.</p>
-      <p>The system provided here caters for different preferences simply by changing the playlist.</p>
-      <h3><a href="http://www.bkthai.com/traffic/">Indian online system</a></h3>
-      <p>Two systems are available here. One is an online desktop browser system similar to this one and the other is a desktop application implmemented in Adobe Air. The desktop version has more
-      playlist options.</p>
-      <h3>Traffic control "boxes" available in Global Shop, Madhuban etc</h3>
-      <p>These consist of a Bluetooth speaker that also accepts an SD card. The SD card is pre-programmed with fixed songs and silence tracks so that it repeats every twenty four hours. The SD card is glued into the speaker, presumably to prevent it getting lost. To initialise the box it is necessary to find the correct track for the hour and start it playing at exactly that time. This system is likely to drift off time very quickly after the first day.</p>
-      <h3>Android Apps</h3>
-      There are some Android Apps available that implement Traffic Control. These are the ones I found. I haven't personally tried them.
-      <ul>
-        <li><a href="https://play.google.com/store/apps/details?id=org.brahmakumaris.alert">Brahma Kumaris Traffic Control (Bro Gil, UK)</a></li>
-        <li><a href="https://play.google.com/store/apps/details?id=com.sg.omshanti">Traffic Control (Customizable)</a></li>
-        <li><a href="https://play.google.com/store/apps/details?id=com.conduit.app_8e252ed951604af8a54a0cc0457fcd04.app">My Traffic Control</a></li>
-      </ul>
-      <p>
-      <h3>Iphone/Ipad Apps</h3>
-      <ul>
-        <li><a href="https://itunes.apple.com/gb/app/brahma-kumaris-traffic-control/id515261773">Brahma Kumaris Traffic Control</a></li>
-      </ul>
+    <nav class="navbar navbar-expand-lg navbar-dark shadow-sm mb-4">
+      <div class="container">
+        <a class="navbar-brand d-flex align-items-center" href="index.html">
+          <i class="bi bi-broadcast-pin me-2"></i>
+          <span>Brahma Kumaris Traffic Control</span>
+        </a>
+      </div>
+    </nav>
+    
+    <div class="container">
+      <a href="index.html" class="back-link">
+        <i class="bi bi-arrow-left"></i>
+        Back to Traffic Control
+      </a>
+      
+      <div class="card p-4 p-md-5">
+        <h1><i class="bi bi-info-circle me-2"></i>About This Application</h1>
+        
+        <p class="lead">The Brahma Kumaris system of "Traffic Control" is a mental exercise practised throughout the day at various times to stop all the traffic of thoughts on cue, as if presented with a red traffic light signal.</p>
+        
+        <p>Reminders to do this are broadcast through the main Brahma Kumaris centres by playing some soft music or an old Hindi song over a PA system at the designated times. Implementing such a system used to be hard work when the only technology available was a cassette recorder and a timer, or someone to press "play". Fortunately, the widespread availability of computers and smart devices has made implementing Traffic Control very simple.</p>
+        
+        <p>This system works in two ways. Firstly it runs as you see it, in a desktop web browser and secondly it is possible to install it on a <a href="https://www.raspberrypi.org/">Raspberry Pi</a> device to run continuously in, say, a centre using <a href="https://drive.google.com/drive/folders/0B4piTloTCvuVUTA2X295WWdzOTQ?usp=sharing">this modified Raspberry Pi image</a>.</p>
+        
+        <h2><i class="bi bi-display me-2"></i>Operating Modes</h2>
+        
+        <div class="mode-card">
+          <div class="feature-icon">
+            <i class="bi bi-browser-chrome"></i>
+          </div>
+          <div>
+            <h3>Web Browser Mode</h3>
+            <p>When this website is accessed by a desktop web browser it will automatically play the Traffic Control music as long as the desktop computer remains awake and the Traffic Control web page is open. Unfortunately, this website won't work on mobile devices because it is not possible for a website to start playing music automatically. If you wish to play Traffic Control music on your mobile device then see some of the options below for Android and Apple devices.</p>
+          </div>
+        </div>
+        
+        <div class="mode-card">
+          <div class="feature-icon">
+            <i class="bi bi-cpu"></i>
+          </div>
+          <div>
+            <h3>Raspberry Pi Mode</h3>
+            <p>When the application is running on a Raspberry Pi, it is accessed on the same network using the URL, http://tcpi. Extra controls are visible to control whether the music plays on the Raspberry Pi or through the web browser accessing the Raspberry Pi. Also the library of music can be added to by uploading your own music.</p>
+          </div>
+        </div>
+        
+        <h2><i class="bi bi-globe me-2"></i>Other Systems</h2>
+        
+        <p>There is a difference in style between systems originating in India and outside India. In India exactly the same song is played at the same time of day. The hourly song, the "Drill", is also always the same song. In other countries the words of the songs are not understood and so there is more preference for quiet and varied music with less repetition. Some centres mix traditional songs with varied music for, say, the hourly drill.</p>
+        
+        <p>The system provided here caters for different preferences simply by changing the playlist.</p>
+        
+        <h3><i class="bi bi-link-45deg me-2"></i><a href="http://www.bkthai.com/traffic/">Indian Online System</a></h3>
+        <p>Two systems are available here. One is an online desktop browser system similar to this one and the other is a desktop application implemented in Adobe Air. The desktop version has more playlist options.</p>
+        
+        <h3><i class="bi bi-speaker me-2"></i>Traffic Control "Boxes"</h3>
+        <p>Available in Global Shop, Madhuban etc. These consist of a Bluetooth speaker that also accepts an SD card. The SD card is pre-programmed with fixed songs and silence tracks so that it repeats every twenty-four hours. The SD card is glued into the speaker, presumably to prevent it getting lost. To initialise the box it is necessary to find the correct track for the hour and start it playing at exactly that time. This system is likely to drift off time very quickly after the first day.</p>
+        
+        <h2><i class="bi bi-phone me-2"></i>Mobile Apps</h2>
+        
+        <h3><i class="bi bi-google-play me-2"></i>Android Apps</h3>
+        <p>There are some Android Apps available that implement Traffic Control:</p>
+        <ul>
+          <li><a href="https://play.google.com/store/apps/details?id=org.brahmakumaris.alert">Brahma Kumaris Traffic Control (Bro Gil, UK)</a></li>
+          <li><a href="https://play.google.com/store/apps/details?id=com.sg.omshanti">Traffic Control (Customizable)</a></li>
+          <li><a href="https://play.google.com/store/apps/details?id=com.conduit.app_8e252ed951604af8a54a0cc0457fcd04.app">My Traffic Control</a></li>
+        </ul>
+        
+        <h3><i class="bi bi-apple me-2"></i>iPhone/iPad Apps</h3>
+        <ul>
+          <li><a href="https://itunes.apple.com/gb/app/brahma-kumaris-traffic-control/id515261773">Brahma Kumaris Traffic Control</a></li>
+        </ul>
+      </div>
+      
+      <footer>
+        <p>&copy; Brahma Kumaris Traffic Control System</p>
+      </footer>
     </div>
   </body>
 </html>
