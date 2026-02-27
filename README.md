@@ -2,7 +2,29 @@
 
 Traffic Control is a PHP-based audio scheduling and playback system, designed to run on Linux systems like the Raspberry Pi. It allows for complex scheduling of audio files and directories, with features like volume management, fading, and chime support.
 
-## Prerequisites
+## Installation
+
+### Option 1: Home Assistant Add-on (Recommended)
+
+Traffic Control can run as a Home Assistant add-on, which handles all dependencies and configuration automatically.
+
+1. **Copy the add-on to your HA config directory:**
+   ```bash
+   cp -r trafficcontrol /config/addons/trafficcontrol
+   ```
+
+2. **Install via the HA UI:**
+   Go to **Settings → Add-ons → Add-on Store**, click the refresh icon (top-right), and the add-on will appear under **Local add-ons**.
+
+3. **Start the add-on.** The web UI is then accessible from the HA sidebar, or directly at `http://your-ha-ip:8099`.
+
+**Storage:** Playlists and settings are persisted in HA's add-on data directory. Music files live in `/media/trafficcontrol/`, which is accessible via HA's Media browser. The built-in chime sounds are copied there automatically on first run.
+
+**Audio:** The add-on passes `/dev/snd` through to the container for ALSA access. Make sure your audio device is ALSA-compatible.
+
+### Option 2: Bare-metal (Nginx + PHP)
+
+#### Prerequisites
 
 - **Web Server:** Apache or Nginx with PHP support.
 - **PHP:** Version 7.4 or higher recommended.
@@ -13,7 +35,7 @@ Traffic Control is a PHP-based audio scheduling and playback system, designed to
   - `amixer` (for volume control)
   - `bc` (for calculations)
 
-## Installation
+#### Steps
 
 1.  **Clone the Repository:**
     Clone the project to your web server's document root:
@@ -21,49 +43,41 @@ Traffic Control is a PHP-based audio scheduling and playback system, designed to
     git clone <repository-url> /var/www/html/trafficcontrol
     ```
 
-2.  **Set Permissions:**
-    The application requires write access to its system directory for persistent storage and logs.
+2.  **Run the deployment script** (installs packages, configures nginx and cron automatically):
+    ```bash
+    sudo bash deploy.sh
+    ```
+
+    Or set up manually:
+
     ```bash
     cd /var/www/html/trafficcontrol
     mkdir .tcsys
     sudo chown -R www-data:www-data .tcsys Music
     sudo chmod -R 775 .tcsys Music
+    sudo apt install mplayer alsa-utils bc
     ```
 
-3.  **Install Dependencies:**
-    Ensure the required OS packages are installed:
+3.  **Configure the cron job** (if not using `deploy.sh`):
     ```bash
-    sudo apt update
-    sudo apt install mplayer alsa-utils bc
+    sudo crontab -u www-data -e
+    ```
+    Add:
+    ```cron
+    * * * * * /usr/bin/php /var/www/html/trafficcontrol/php/cron.php > /dev/null 2>&1
     ```
 
 ## Configuration
 
-### 1. Web Interface
-Access the application via your browser (e.g., `http://your-pi-ip/trafficcontrol/index.html`) to configure playlists and schedules.
+### Audio Output
+The application automatically detects your sound card. If using Bluetooth, ensure `bluealsa` is configured.
 
-### 2. Audio Output
-The application automatically attempts to detect your sound card. You can verify audio settings in `php/tc.lib.php`. If using Bluetooth, ensure `bluealsa` is configured.
-
-### 3. Scheduling (Cron)
-To enable automated playback, add a cron job that runs the scheduler every minute.
-
-Open the crontab for the web server user:
-```bash
-sudo crontab -u www-data -e
-```
-
-Add the following line:
-```cron
-* * * * * /usr/bin/php /var/www/html/trafficcontrol/php/cron.php > /dev/null 2>&1
-```
-
-### 4. Debugging
+### Debugging
 To enable debug logging, create an empty file named `debug` in the `.tcsys` directory:
 ```bash
 touch /var/www/html/trafficcontrol/.tcsys/debug
 ```
-Logs will be written to `.tcsys/debug.log`.
+Logs will be written to `.tcsys/debug.log`. When running as an HA add-on, `.tcsys` maps to the add-on's persistent data directory.
 
 ## Using the Web Interface
 
@@ -121,10 +135,15 @@ When in System mode, the **Preview Mode** toggle controls where preview playback
 
 ## Directory Structure
 
-- `Music/`: Root directory for audio files.
+- `Music/`: Root directory for audio files (symlinked to `/media/trafficcontrol` in the HA add-on).
 - `php/`: Core logic and scheduler.
-- `.tcsys/`: Persistent storage, locks, and logs (created during installation).
+- `.tcsys/`: Persistent storage, locks, and logs (symlinked to `/data` in the HA add-on).
 - `elFinder-2.1.65/`: File manager for managing audio files via the web UI.
+- `Dockerfile`: Container definition for the HA add-on.
+- `config.yaml`: HA add-on manifest.
+- `build.yaml`: Base image configuration per CPU architecture.
+- `run.sh`: Container startup script.
+- `ha-nginx.conf`: nginx configuration for the container.
 
 ## License
 This project is released under the MIT License.
