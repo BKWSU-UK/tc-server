@@ -141,6 +141,22 @@
               $tc->releaseLock('play');
             }
             break;
+          case 'setVolume':
+            if (!clientInSameSubnet()) {
+              http_response_code(403);
+              die('Can not set volume from WAN');
+            }
+            checkOsCommands ();
+            if (isset($_REQUEST['index'])) {
+              $index = (int)$_REQUEST['index'];
+              $tc->loadStored();
+              if (isset($_REQUEST['volume'])) {
+                $stored->list[$stored->selectedPlayList]->list[$index]->volume = (int)$_REQUEST['volume'];
+              }
+              $oldId = @exec('ps aux | grep -F -v grep | grep -F mplayer | grep -P -o "sid [0-9]+ -x [0-9]+$" | tr -cd "0-9\-"');
+              setPlayerVolumeAndLength($index, false, '', $oldId, false, getMplayerAudioOutput());
+            }
+            break;
           case 'stop':
             if (!clientInSameSubnet()) {
               http_response_code(403);

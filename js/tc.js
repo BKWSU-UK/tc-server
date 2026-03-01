@@ -234,6 +234,11 @@ var TC = new function () {
         if (!TC.controlsHoldOff) {
           $('#audioPlayer').prop('volume', TC.compositeVolume() / 100);
         }
+        if (TC.system && TC.serverAvailable) {
+          $.ajax({ url: 'php/tc.php?action=setVolume&index=' + index + '&volume=' + value,
+            error: function (xhr) { console.error(xhr.status + ': ' + xhr.responseText); }
+          });
+        }
       }
       TC.storeAll(false);
     });
@@ -252,6 +257,11 @@ var TC = new function () {
         TC.heldOffVolume = TC.compositeVolume();
         if (!TC.controlsHoldOff) {
           $('#audioPlayer').prop('volume', TC.compositeVolume() / 100);
+        }
+        if (TC.system && TC.serverAvailable) {
+          $.ajax({ url: 'php/tc.php?action=setVolume&index=' + index + '&volume=' + newVal,
+            error: function (xhr) { console.error(xhr.status + ': ' + xhr.responseText); }
+          });
         }
       }
       TC.storeAll(false);
