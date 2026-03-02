@@ -1,4 +1,5 @@
 #!/usr/bin/with-contenv bashio
+set -euo pipefail
 
 APP_DIR=/var/www/html/trafficcontrol
 
@@ -50,5 +51,12 @@ chmod 644 /etc/cron.d/trafficcontrol
 
 # --- Start services ---
 "$PHP_FPM_BIN" --nodaemonize &
+
+# Wait for PHP-FPM socket to be ready before starting nginx (up to 10s)
+for i in $(seq 1 40); do
+  [ -S "$PHP_FPM_SOCK" ] && break
+  sleep 0.25
+done
+
 cron
 exec nginx -g "daemon off;"

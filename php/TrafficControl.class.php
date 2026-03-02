@@ -1,8 +1,8 @@
 <?php
 
 class TrafficControl {
-    private $stored;
-    private $lockHandle;
+    private ?stdClass $stored = null;
+    private mixed $lockHandle = null;
 
     public function __construct() {
         if (!defined('SYSTEMDIR')) {
@@ -11,7 +11,7 @@ class TrafficControl {
         $this->setTimezone();
     }
 
-    private function setTimezone() {
+    private function setTimezone(): void {
         $this->loadStored();
         if (isset($this->stored->timezone)) {
             date_default_timezone_set($this->stored->timezone);
@@ -20,7 +20,7 @@ class TrafficControl {
         }
     }
 
-    public function loadStored() {
+    public function loadStored(): stdClass {
         if ($this->stored === null) {
             if (file_exists(PERSISTENTFILE)) {
                 $content = file_get_contents(PERSISTENTFILE);
@@ -29,7 +29,7 @@ class TrafficControl {
                 $content = file_get_contents(PERSISTENTFILEDEFAULT);
                 $this->stored = json_decode($content);
             }
-            
+
             if (!$this->stored) {
                 $this->stored = new stdClass();
             }
@@ -37,7 +37,11 @@ class TrafficControl {
         return $this->stored;
     }
 
-    public function saveStored() {
+    public function setStored(stdClass $data): void {
+        $this->stored = $data;
+    }
+
+    public function saveStored(): void {
         if (!property_exists($this->stored, 'list')) {
             throw new Exception('Tried to write corrupt playlist');
         }
@@ -51,7 +55,7 @@ class TrafficControl {
         chmod(PERSISTENTFILE, 0664);
     }
 
-    public function getLock($source) {
+    public function getLock(string $source): void {
         if (!is_writable(SYSTEMDIR)) {
             throw new Exception('System directory is not writable');
         }
@@ -72,7 +76,7 @@ class TrafficControl {
         $this->debugLog("Got lock from $source at " . date("Y-m-d h:i:sa"));
     }
 
-    public function releaseLock($source) {
+    public function releaseLock(string $source): void {
         if ($this->lockHandle) {
             flock($this->lockHandle, LOCK_UN);
             fclose($this->lockHandle);
@@ -81,13 +85,13 @@ class TrafficControl {
         }
     }
 
-    public function debugLog($message) {
+    public function debugLog(string $message): void {
         if (DEBUG) {
             file_put_contents(DEBUGLOG, $message . "\n", FILE_APPEND);
         }
     }
 
-    public function findNext() {
+    public function findNext(): void {
         $timeNow = time();
         $weekNumber = intval(date('j', $timeNow) / 7) + 1;
         $weekDay = strtolower(date('l', $timeNow));
@@ -131,11 +135,5 @@ class TrafficControl {
             }
         }
         $this->stored->day = date('w');
-    }
-
-    public function playEntry($index) {
-        // Implementation of playEntry logic...
-        // This would call the functions in tc.lib.php for now or we move them here
-        return playEntry($index);
     }
 }

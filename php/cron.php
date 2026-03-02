@@ -12,42 +12,49 @@
   }
 
   checkOsCommands ();
-  
+
   function next_and_store() {
     global $tc;
     $tc->findNext();
     $tc->saveStored();
   }
+
   if (DEBUG) {
     set_exception_handler('errorLog');
   }
-  $tc->getLock('cron');
-  $stored = $tc->loadStored(); // Initialize global variable for procedural functions
 
-  if (property_exists($stored, 'nextEventTime') && ($stored->system === true)) {
-    if (DEBUG) {
-        $logEntry = "Comparing time " . date('G:i') . " with " . date('G:i', $stored->nextEventTime) . "\n";
-        $tc->debugLog($logEntry);
-    }
-    if (date('G:i') === date('G:i', $stored->nextEventTime)) {
-      $played = playEntry($stored->nextEventIndex);
-      $logEntry = "Played \"" . $played . "\" for index " . $stored->nextEventIndex . " at " . date('r');
-      @exec('if [ $( wc -l ' . escapeshellarg(DEBUGLOG) . ' | awk \'{print $1}\' ) -gt 1100 ]; then tail -n 1000 ' . escapeshellarg(DEBUGLOG) . ' >' . escapeshellarg(DEBUGLOG . '_temp') . '; mv -f ' . escapeshellarg(DEBUGLOG . '_temp') . ' ' . escapeshellarg(DEBUGLOG) . '; fi');
-      next_and_store();
-      $logEntry .= ", next due : " . date('G:i', $stored->nextEventTime) . "\n";
-      $tc->debugLog($logEntry);
-    } else {
-      //Force refresh at the start of each day
-      if (DEBUG && property_exists($stored, 'day')) {
-        $logEntry = "Comparing day " . date('w') . " with " . $stored->day . "\n";
-        $tc->debugLog($logEntry);
+  try {
+    $tc->getLock('cron');
+    $stored = $tc->loadStored(); // Initialize global variable for procedural functions
+
+    if (property_exists($stored, 'nextEventTime') && ($stored->system === true)) {
+      if (DEBUG) {
+          $logEntry = "Comparing time " . date('G:i') . " with " . date('G:i', $stored->nextEventTime) . "\n";
+          $tc->debugLog($logEntry);
       }
-      if (!property_exists($stored, 'day') || ($stored->day !== date('w'))) {
+      if (date('G:i') === date('G:i', $stored->nextEventTime)) {
+        $played = playEntry($stored->nextEventIndex);
+        $logEntry = "Played \"" . $played . "\" for index " . $stored->nextEventIndex . " at " . date('r');
+        exec('if [ $( wc -l ' . escapeshellarg(DEBUGLOG) . ' | awk \'{print $1}\' ) -gt 1100 ]; then tail -n 1000 ' . escapeshellarg(DEBUGLOG) . ' >' . escapeshellarg(DEBUGLOG . '_temp') . '; mv -f ' . escapeshellarg(DEBUGLOG . '_temp') . ' ' . escapeshellarg(DEBUGLOG) . '; fi');
         next_and_store();
+        $logEntry .= ", next due : " . date('G:i', $stored->nextEventTime) . "\n";
+        $tc->debugLog($logEntry);
+      } else {
+        //Force refresh at the start of each day
+        if (DEBUG && property_exists($stored, 'day')) {
+          $logEntry = "Comparing day " . date('w') . " with " . $stored->day . "\n";
+          $tc->debugLog($logEntry);
+        }
+        if (!property_exists($stored, 'day') || ($stored->day !== date('w'))) {
+          next_and_store();
+        }
       }
+    } else {
+      next_and_store();
     }
-  } else {
-    next_and_store();
+    $tc->releaseLock('cron');
+  } catch (Exception $e) {
+    $tc->debugLog('Cron error: ' . $e->getMessage() . ' in ' . $e->getFile() . ' line ' . $e->getLine());
+    $tc->releaseLock('cron error');
   }
-  $tc->releaseLock('cron');
 ?>

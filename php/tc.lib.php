@@ -17,7 +17,7 @@
   define ( 'OS_COMMANDS', 'bc|amixer|mplayer');
   define ( 'CARD_NUM', (function() {
     $aplayOutput = [];
-    @exec('aplay -l 2>/dev/null', $aplayOutput);
+    exec('aplay -l 2>/dev/null', $aplayOutput);
     foreach ($aplayOutput as $line) {
         if (preg_match('/^card (\d+):.*device 0:/', $line, $matches)) {
             $cardNum = intval($matches[1]);
@@ -32,64 +32,9 @@
   //This may be changed by some functions but must be set now
   //to prevent warnings
   date_default_timezone_set ( "Europe/London" );
-  
-  // Global lock
-  $locked = false;
-  
-  function dump($thingToDump) {
-    echo "<pre>\n";
-    print_r($thingToDump);
-    echo "\n</pre>\n";
-  }
 
   function sys_writable () {
     return is_writable(SYSTEMDIR);
-  }
-
-
-  if (!function_exists('str_ends_with')) {
-    function str_ends_with($str, $end) {
-      return (@substr_compare($str, $end, -strlen($end))==0);
-    }
-  }
-
-  function get_lock ($fromWhere) {
-    global $locked;
-    
-    if (! sys_writable() ) {
-      http_response_code(403);
-      die('Local system directory, ' . SYSTEMDIR . ', is not writable');
-    }
-
-    $lockFile = fopen(PERSISTENTLOCK, 'c');
-    if (!$lockFile) {
-        http_response_code(500);
-        die('Could not create lock file');
-    }
-
-    $startTime = time();
-    while (!flock($lockFile, LOCK_EX | LOCK_NB)) {
-        if (time() - $startTime > LOCKTIMEOUT) {
-            fclose($lockFile);
-            http_response_code(503);
-            die('Lock timeout');
-        }
-        usleep(250000); // 250ms
-    }
-
-    $locked = $lockFile;
-    debugLog("Got lock from " . $fromWhere . " at " . date("Y-m-d h:i:sa"));
-  }
-
-  function yield_lock ($fromWhere) {
-    global $locked;
-    
-    if ($locked) {
-        flock($locked, LOCK_UN);
-        fclose($locked);
-        $locked = false;
-    }
-    debugLog("Released lock from " . $fromWhere . " at " . date("Y-m-d h:i:sa"));
   }
 
 /*
@@ -116,7 +61,7 @@
 
 function calculateBankHolidays($yr) {
 
-  $bankHols = Array();
+  $bankHols = [];
 
   // New year's:
   switch ( date("w", strtotime("$yr-01-01 12:00:00")) ) {
@@ -242,116 +187,52 @@ function calculateBankHolidays($yr) {
   return $bankHols;
 }
 
-  function find_next () {
-    global $stored;
-
-    $timeNow = time ();
-    $weekNumber = intval(date('j', $timeNow) / 7) + 1;
-    $weekDay = strtolower(date('l', $timeNow));
-    $hour = intval(date('G', $timeNow));
-    $minute = intval(date('i', $timeNow));
-    $bestTime = -1;
-
-    //If play list is selected then start
-    if (isset($stored->selectedPlayList)) {
-      $i = -1;
-      foreach($stored->list[$stored->selectedPlayList]->list as $listItem) {
-        $i++;
-
-        if (!property_exists($listItem, 'week')) {
-          continue;
-        }
-
-        //Skip if never playing
-        if ($listItem->exception === 'never') {
-          continue;
-        }
-
-        $dayMatch = (($listItem->week === 'all' || (intval($listItem->week) === $weekNumber)) &&
-                  (($listItem->day === 'day') || ($listItem->day === $weekDay)));
-
-        //Skip if wrong day
-        if (($listItem->exception === 'every') !== $dayMatch) {
-          continue;
-        }
-
-        $timeBits = explode(':', str_replace(' ','', $listItem->time));
-
-        //Convert AM/PM + hour to 24 hour
-        $timeBits[0] = intval($timeBits[0]);
-        if ($timeBits[0] === 12) {
-          $timeBits[0] = ($timeBits[2] === 'PM') ? 12 : 0;
-        } else {
-          if ($timeBits[2] === 'PM') {
-            $timeBits[0] += 12;
+  /**
+  * Check if a client IP is in our Server subnet
+  *
+  * @param string $clientIp
+  * @param string $serverIp
+  * @return boolean
+  */
+  function clientInSameSubnet($clientIp=false,$serverIp=false) {
+      if (!$clientIp) {
+        $clientIp = $_SERVER['REMOTE_ADDR'] ?? '';
+      }
+      if (!$serverIp)
+          $serverIp = $_SERVER['SERVER_ADDR'] ?? '';
+      if (!$clientIp) return false;
+      //if same then obviously on LAN
+      if ($clientIp === $serverIp) return true;
+      // Loopback is always local
+      if ($clientIp === '127.0.0.1' || $clientIp === '::1') return true;
+      // Extract all interface CIDRs from ip addr show
+      exec('ip addr show 2>/dev/null', $ipAddrShow);
+      $output = implode("\n", $ipAddrShow);
+      // Primary check: find SERVER_ADDR's subnet and compare
+      if ($serverIp) {
+          $escapedServerIp = str_replace('.', '\.', $serverIp);
+          preg_match_all('/' . $escapedServerIp . '\/([0-9]{1,2})/', $output, $ipMatches);
+          if (!empty($ipMatches[0])) {
+              $maskLen = (int)$ipMatches[1][0];
+              $mask = -1 << (32 - $maskLen);
+              if ((ip2long($clientIp) & $mask) === (ip2long($serverIp) & $mask)) return true;
           }
-        }
-        //Skip any time that is past now
-        if ($hour > $timeBits[0]) {
-          continue;
-        }
-        $timeBits[1] = intval($timeBits[1]);
-        if (($hour === $timeBits[0]) && ($minute >= $timeBits[1])) {
-          continue;
-        }
-        $itemTime = strtotime($timeBits[0] . ':' . $timeBits[1]);
-
-
-        if (($bestTime === -1) || ($itemTime < $bestTime)) {
-          $bestTime = $itemTime;
-          $stored->nextEventTime = $bestTime;
-          $stored->nextEventIndex = $i;
-        }
       }
-    }
-    //Record day
-    $stored->day = date('w');
-  }
-
-  function set_tz () {
-    global $stored;
-
-    date_default_timezone_set ( $stored->timezone );
-  }
-
-  function get_stored () {
-    global $stored;
-
-    //Only load if not loaded already
-    if (!isset($stored)) {
-      //Load persistent data
-      if (file_exists(PERSISTENTFILE)) {
-        $stored = json_decode(file_get_contents(PERSISTENTFILE));
-      } elseif (file_exists(PERSISTENTFILEDEFAULT)) {
-        $stored = json_decode(file_get_contents(PERSISTENTFILEDEFAULT));
-      } else {
-        $stored = new stdClass();
+      // Fallback: check client IP against all interface subnets.
+      // Handles Docker/NAT where SERVER_ADDR is on a different subnet than the client's real IP.
+      preg_match_all('/inet (\d+\.\d+\.\d+\.\d+)\/(\d+)/', $output, $allMatches, PREG_SET_ORDER);
+      foreach ($allMatches as $m) {
+          if ($m[1] === '127.0.0.1') continue;
+          $mask = -1 << (32 - (int)$m[2]);
+          if ((ip2long($clientIp) & $mask) === (ip2long($m[1]) & $mask)) return true;
       }
-    }
-    //Always set the time zone at this point
-    set_tz();
-  }
-
-  function put_stored() {
-    global $stored;
-
-    if (!property_exists($stored, 'list')) {
-      http_response_code(507);
-      trigger_error('Tried to write corrupt playlist', E_USER_ERROR);
-      die('Tried to write corrupt playlist');
-    }
-    $json = json_encode($stored, JSON_PRETTY_PRINT);
-    if ($json === false) {
-        http_response_code(500);
-        die('JSON encoding failed');
-    }
-    if (file_put_contents(PERSISTENTFILE, $json, LOCK_EX) !== false) {
-      chmod(PERSISTENTFILE, 0664);
-    } else {
-      http_response_code(507);
-      trigger_error('Attempt to write new playlist file failed', E_USER_ERROR);
-      die('Attempt to write new playlist file failed');
-    }
+      // Last resort: if both client and server are on RFC 1918 private ranges,
+      // treat as LAN (covers Docker port-mapping where real client IP is preserved).
+      $isPrivate = function($ip) {
+          return filter_var($ip, FILTER_VALIDATE_IP) !== false
+              && filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+      };
+      return $isPrivate($clientIp) && $isPrivate($serverIp);
   }
 
   function dbToVol ($levelDb) {
@@ -365,10 +246,10 @@ function calculateBankHolidays($yr) {
     $levelDb = 0 - ((99 - $level) * DB_PER_VOL_UNIT);
     return $levelDb;
   }
-  
+
   function getAudioDevices() {
     $devices = [];
-    
+
     // Scan ALSA cards from /proc/asound/cards
     $cards = @file_get_contents('/proc/asound/cards');
     if ($cards !== false) {
@@ -389,10 +270,10 @@ function calculateBankHolidays($yr) {
         }
       }
     }
-    
+
     // Scan Bluetooth devices via bluetoothctl
     $btLines = [];
-    @exec('command -v bluetoothctl >/dev/null 2>&1 && bluetoothctl devices Connected 2>/dev/null', $btLines);
+    exec('command -v bluetoothctl >/dev/null 2>&1 && bluetoothctl devices Connected 2>/dev/null', $btLines);
     if (!empty($btLines)) {
       foreach ($btLines as $btLine) {
         if (preg_match('/^Device\s+([0-9A-F:]+)\s+(.+)$/i', trim($btLine), $btMatches)) {
@@ -408,10 +289,10 @@ function calculateBankHolidays($yr) {
         }
       }
     }
-    
+
     // Check for bluealsa as fallback bluetooth detection
     if (empty(array_filter($devices, fn($d) => $d['type'] === 'bluetooth'))) {
-      $bluealsaCheck = @exec('which bluealsa-aplay >/dev/null 2>&1 && bluealsa-aplay -L 2>/dev/null | grep -Eo "^[0-9A-F:]+\\s" | head -1');
+      $bluealsaCheck = exec('which bluealsa-aplay >/dev/null 2>&1 && bluealsa-aplay -L 2>/dev/null | grep -Eo "^[0-9A-F:]+\\s" | head -1');
       if (!empty($bluealsaCheck)) {
         $devices[] = [
           'id' => 'bluetooth:bluealsa',
@@ -422,7 +303,7 @@ function calculateBankHolidays($yr) {
         ];
       }
     }
-    
+
     // Add auto-detect option at the beginning
     array_unshift($devices, [
       'id' => 'auto',
@@ -430,10 +311,10 @@ function calculateBankHolidays($yr) {
       'name' => 'Auto-detect',
       'displayName' => 'Auto-detect (default)'
     ]);
-    
+
     return $devices;
   }
-  
+
   function getSelectedAudioDevice() {
     global $stored;
     if (isset($stored) && is_object($stored) && property_exists($stored, 'audioDevice')) {
@@ -441,7 +322,7 @@ function calculateBankHolidays($yr) {
     }
     return 'auto';
   }
-  
+
   function resolveAudioDevice($selectedDevice) {
     if ($selectedDevice === 'auto') {
       return 'auto';
@@ -468,11 +349,11 @@ function calculateBankHolidays($yr) {
 
   function getDevCardInfo() {
     global $stored;
-    
-    $selectedDevice = (isset($stored) && is_object($stored) && property_exists($stored, 'audioDevice')) 
+
+    $selectedDevice = (isset($stored) && is_object($stored) && property_exists($stored, 'audioDevice'))
                       ? $stored->audioDevice : 'auto';
     $selectedDevice = resolveAudioDevice($selectedDevice);
-    
+
     // Handle explicit device selection
     if ($selectedDevice !== 'auto') {
       if (strpos($selectedDevice, 'alsa:') === 0) {
@@ -486,7 +367,7 @@ function calculateBankHolidays($yr) {
         return ' -D bluealsa';
       }
     }
-    
+
     // Auto-detect: prefer non-HDMI ALSA card, fallback to bluetooth
     if (CARD_NUM != -1) {
       $cards = @file_get_contents('/proc/asound/cards');
@@ -497,39 +378,51 @@ function calculateBankHolidays($yr) {
         $devCardInfo = "-c " . CARD_NUM;
       }
     } else {
-      $devCardInfo = (@exec( 'which bluealsa-aplay >/dev/null && bluealsa-aplay -L | grep -Fo headset' ) === 'headset')?' -D bluealsa':'';
+      $devCardInfo = (exec( 'which bluealsa-aplay >/dev/null && bluealsa-aplay -L | grep -Fo headset' ) === 'headset')?' -D bluealsa':'';
     }
     return $devCardInfo;
   }
-  
+
   function getMplayerAudioOutput() {
     global $stored;
-    
-    $selectedDevice = (isset($stored) && is_object($stored) && property_exists($stored, 'audioDevice')) 
+
+    $selectedDevice = (isset($stored) && is_object($stored) && property_exists($stored, 'audioDevice'))
                       ? $stored->audioDevice : 'auto';
     $selectedDevice = resolveAudioDevice($selectedDevice);
-    
-    // Check if PulseAudio/PipeWire is available
+
+    // Check if PulseAudio/PipeWire is available via the current process's session
     $hasPulse = false;
     $xdgRuntime = getenv('XDG_RUNTIME_DIR');
     if ($xdgRuntime && (file_exists("$xdgRuntime/pulse/native") || file_exists("$xdgRuntime/pipewire-0"))) {
-      // Check if we can actually access it (same uid)
       $runtimeStat = @stat($xdgRuntime);
       if ($runtimeStat && $runtimeStat['uid'] === posix_getuid()) {
         $hasPulse = true;
       }
     }
-    
+
+    // When running as a server process (e.g. www-data), XDG_RUNTIME_DIR is not
+    // set, but a desktop user's PulseAudio/PipeWire socket may still be readable
+    // if permissions allow.  Check all logged-in users' runtime dirs.
+    if (!$hasPulse) {
+      foreach (glob('/run/user/*/pulse/native') ?: [] as $socket) {
+        if (is_readable($socket)) {
+          putenv('PULSE_SERVER=unix:' . $socket);
+          $hasPulse = true;
+          break;
+        }
+      }
+    }
+
     if ($hasPulse) {
       return '-ao pulse';
     }
-    
+
     // Fall back to ALSA with plughw (allows software mixing, works alongside PipeWire)
     if ($selectedDevice !== 'auto' && strpos($selectedDevice, 'alsa:') === 0) {
       $cardId = substr($selectedDevice, 5);
       return '-ao alsa:device=plughw=' . $cardId . '.0';
     }
-    
+
     // Auto-detect ALSA card
     if (CARD_NUM >= 0) {
       $cards = @file_get_contents('/proc/asound/cards');
@@ -539,18 +432,18 @@ function calculateBankHolidays($yr) {
       }
       return '-ao alsa:device=plughw=' . CARD_NUM . '.0';
     }
-    
+
     // Last resort - let mplayer auto-detect
     return '';
   }
   function getIsMapped() {
     $devCardInfo = getDevCardInfo();
-    $isMapped = (@exec('amixer ' . $devCardInfo . ' -M 2>&1 | grep -Fo invalid') !== 'invalid');
+    $isMapped = (exec('amixer ' . $devCardInfo . ' -M 2>&1 | grep -Fo invalid') !== 'invalid');
     return $isMapped;
   }
-  
+
   function prepareMixer (&$oldId, &$devCardInfo, &$controlId, &$level, &$isMapped) {
-    $devCardInfo = getDevCardInfo();    
+    $devCardInfo = getDevCardInfo();
     $isMapped = getIsMapped();
     if ($isMapped) {
       //Copy initial level from playing instance if available
@@ -593,7 +486,7 @@ function calculateBankHolidays($yr) {
     $combinedLogVolume = 0;
     if ($combinedVolume > 0) {
       //Math.pow(10, (compositeVolume + 1) / 50) - 1
-      
+
       $combinedLogVolume = intval(100 - ((0 - log10($combinedVolume / 100))*50));
     }
     //Default initial value
@@ -607,7 +500,7 @@ function calculateBankHolidays($yr) {
         $command = 'amixer ' . $devCardInfo . ' cset ' . $escapedControlId . ' ' . $combinedLogVolume . '% >/dev/null 2>&1';
       }
       debugLog($command);
-      exec ($command);      
+      exec ($command);
       //Program music playing time and fade if set
       if ($setLength) {
         if (property_exists($item, 'howLong') && (intval($item->howLong) > 0)) {
@@ -627,7 +520,7 @@ function calculateBankHolidays($yr) {
             //Do not act if different id playing at time of end of song
             $fadeStartVol = (($isMapped)?$combinedVolume:$combinedLogVolume);
             $fadeStepMs = intval($fadeTimeMs / max(1, $fadeStartVol));
-            
+
             $command .= '  id=' . escapeshellarg($id) . '
                           if ps aux | grep -v grep | grep -F -q -- "-x $id" ; then
                             time=$( date +%s%3N )
@@ -664,9 +557,11 @@ function calculateBankHolidays($yr) {
     static $elFinder = null;
 
     if ($elFinder === null) {
+      $prevErrorLevel = error_reporting(E_ALL & ~E_DEPRECATED & ~E_STRICT);
       include_once ELFINDERPHP.'elFinder.class.php';
       include_once ELFINDERPHP.'elFinderVolumeDriver.class.php';
       include_once ELFINDERPHP.'elFinderVolumeLocalFileSystem.class.php';
+      error_reporting($prevErrorLevel);
 
       $opts = array(
         'roots' => array(
@@ -681,7 +576,7 @@ function calculateBankHolidays($yr) {
     }
 
     $sounds = array();
-    
+
     if (empty($phash)) {
       $sounds[] = array('path' => 'Chime', 'name' => 'Chime', 'hash' => '', 'mime' => 'audio/chime');
       $result = $elFinder->exec('open', array('target' => '', 'tree' => false, 'init' => true));
@@ -696,15 +591,15 @@ function calculateBankHolidays($yr) {
         $currentPath = $result['cwd']['name'];
       }
     }
-    
+
     if (isset($result['files'])) {
       foreach ($result['files'] as $file) {
         if (!isset($file['name']) || strpos($file['name'], '.') === 0) continue;
         if (!empty($phash) && isset($file['phash']) && $file['phash'] !== $phash) continue;
-        
+
         $isDir = (isset($file['mime']) && $file['mime'] === 'directory');
         $isAudio = (isset($file['mime']) && strpos($file['mime'], 'audio') !== false);
-        
+
         if ($isDir || $isAudio) {
           $name = $file['name'];
           $path = empty($currentPath) ? $name : $currentPath . '/' . $name;
@@ -717,7 +612,7 @@ function calculateBankHolidays($yr) {
         }
       }
     }
-    
+
     usort($sounds, function($a, $b) {
       if ($a['path'] === 'Chime') return -1;
       if ($b['path'] === 'Chime') return 1;
@@ -727,7 +622,7 @@ function calculateBankHolidays($yr) {
       if (!$aIsDir && $bIsDir) return 1;
       return strcasecmp($a['name'], $b['name']);
     });
-    
+
     return $sounds;
   }
 
@@ -755,16 +650,16 @@ function calculateBankHolidays($yr) {
     }
     $currentPath = sanitizePath($currentPath);
     $fullPath = PLAYLISTDIR . '/' . ($currentPath ? $currentPath . '/' : '') . $name;
-    
+
     $parentReal = realpath(PLAYLISTDIR . '/' . $currentPath);
     if ($parentReal === false || strpos($parentReal, realpath(PLAYLISTDIR)) !== 0) {
       return ['error' => 'Invalid path'];
     }
-    
+
     if (file_exists($fullPath)) {
       return ['error' => 'Folder already exists'];
     }
-    
+
     if (mkdir($fullPath, 0755, true)) {
       return ['success' => true];
     }
@@ -778,14 +673,14 @@ function calculateBankHolidays($yr) {
     }
     $fullPath = PLAYLISTDIR . '/' . $path;
     $realPath = realpath($fullPath);
-    
+
     if ($realPath === false || strpos($realPath, realpath(PLAYLISTDIR)) !== 0) {
       return ['error' => 'Invalid path'];
     }
     if ($realPath === realpath(PLAYLISTDIR)) {
       return ['error' => 'Cannot delete root folder'];
     }
-    
+
     if (is_dir($realPath)) {
       $iterator = new RecursiveIteratorIterator(
         new RecursiveDirectoryIterator($realPath, RecursiveDirectoryIterator::SKIP_DOTS),
@@ -815,24 +710,24 @@ function calculateBankHolidays($yr) {
     if (empty($path) || empty($newName)) {
       return ['error' => 'Path and new name are required'];
     }
-    
+
     $fullPath = PLAYLISTDIR . '/' . $path;
     $realPath = realpath($fullPath);
-    
+
     if ($realPath === false || strpos($realPath, realpath(PLAYLISTDIR)) !== 0) {
       return ['error' => 'Invalid path'];
     }
     if ($realPath === realpath(PLAYLISTDIR)) {
       return ['error' => 'Cannot rename root folder'];
     }
-    
+
     $parentDir = dirname($realPath);
     $newPath = $parentDir . '/' . basename($newName);
-    
+
     if (file_exists($newPath)) {
       return ['error' => 'A file with that name already exists'];
     }
-    
+
     if (rename($realPath, $newPath)) {
       return ['success' => true];
     }
@@ -842,7 +737,7 @@ function calculateBankHolidays($yr) {
   function uploadFiles($currentPath, $files) {
     $currentPath = sanitizePath($currentPath);
     $targetDir = PLAYLISTDIR . '/' . $currentPath;
-    
+
     $realTargetDir = realpath($targetDir);
     if ($realTargetDir === false) {
       $realTargetDir = realpath(PLAYLISTDIR);
@@ -851,11 +746,11 @@ function calculateBankHolidays($yr) {
     if (strpos($realTargetDir, realpath(PLAYLISTDIR)) !== 0) {
       return ['error' => 'Invalid path'];
     }
-    
+
     $uploaded = 0;
     $errors = [];
     $audioMimes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/flac', 'audio/ogg', 'audio/m4a', 'audio/aac', 'audio/x-m4a'];
-    
+
     if (isset($files['files'])) {
       $fileCount = count($files['files']['name']);
       for ($i = 0; $i < $fileCount; $i++) {
@@ -863,15 +758,15 @@ function calculateBankHolidays($yr) {
           $tmpName = $files['files']['tmp_name'][$i];
           $name = basename($files['files']['name'][$i]);
           $mime = mime_content_type($tmpName);
-          
+
           if (!in_array($mime, $audioMimes) && strpos($mime, 'audio/') !== 0) {
             $errors[] = "$name: Not an audio file";
             continue;
           }
-          
+
           $name = preg_replace('/[^\w\s\-\.\(\)]/', '_', $name);
           $targetPath = $targetDir . '/' . $name;
-          
+
           if (move_uploaded_file($tmpName, $targetPath)) {
             chmod($targetPath, 0644);
             $uploaded++;
@@ -881,7 +776,7 @@ function calculateBankHolidays($yr) {
         }
       }
     }
-    
+
     if ($uploaded > 0) {
       return ['success' => true, 'uploaded' => $uploaded, 'errors' => $errors];
     }
@@ -892,9 +787,11 @@ function calculateBankHolidays($yr) {
     static $hasInit = false, $command;
 
     if ($hasInit === false) {
+      $prevErrorLevel = error_reporting(E_ALL & ~E_DEPRECATED & ~E_STRICT);
       include_once ELFINDERPHP.'elFinder.class.php';
       include_once ELFINDERPHP.'elFinderVolumeDriver.class.php';
       include_once ELFINDERPHP.'elFinderVolumeLocalFileSystem.class.php';
+      error_reporting($prevErrorLevel);
 
       $opts = array(
         // 'debug' => true,
@@ -935,13 +832,13 @@ function calculateBankHolidays($yr) {
     $dirList = listFiles($phash);
 
     //Create lastPlay if not existing
-    if (gettype($playList) !== 'object') {
+    if (!is_object($playList)) {
       debugLog('Playlist is not an object : ' . "\n" . print_r($playList, true));
     }
-    if (gettype($playList->lastPlay) !== 'object') {
-      debugLog('Playlist->lastPlay is not an object : ' . "\n" . print_r($playList->lastPlay, true));
+    if (!is_object($playList->lastPlay ?? null)) {
+      debugLog('Playlist->lastPlay is not an object : ' . "\n" . print_r($playList->lastPlay ?? null, true));
     }
-    if ((gettype($playList->lastPlay) !== 'object') || !property_exists($playList, 'lastPlay')) {
+    if (!property_exists($playList, 'lastPlay') || !is_object($playList->lastPlay)) {
       $playList->{'lastPlay'} = new stdClass();
     }
 
@@ -950,8 +847,8 @@ function calculateBankHolidays($yr) {
       $playList->lastPlay->{$phash} = new stdClass();
       $playList->lastPlay->{$phash}->{'hashSelectedLocal'} = '';
       $playList->lastPlay->{$phash}->{'hashSelectedRemote'} = '';
-      $playList->lastPlay->{$phash}->{'recentLocal'} = Array();
-      $playList->lastPlay->{$phash}->{'recentRemote'} = Array();
+      $playList->lastPlay->{$phash}->{'recentLocal'} = [];
+      $playList->lastPlay->{$phash}->{'recentRemote'} = [];
     }
 
     $dirPlayed = $playList->lastPlay->{$phash};
@@ -988,11 +885,11 @@ function calculateBankHolidays($yr) {
           }
           break;
         case 'rand':
-          if ((gettype($dirPlayed) === 'object') && !property_exists($dirPlayed, 'recentRemote')) {
-            $dirPlayed->{'recentRemote'} = Array ();
+          if (is_object($dirPlayed) && !property_exists($dirPlayed, 'recentRemote')) {
+            $dirPlayed->{'recentRemote'} = [];
           }
           //Clean up junk from deprecated data structure
-          if ((gettype($dirPlayed) === 'object') && property_exists($entry, 'recentRemote')) {
+          if (is_object($dirPlayed) && property_exists($entry, 'recentRemote')) {
               unset($entry->recentRemote);
           }
           //Default pick
@@ -1001,7 +898,9 @@ function calculateBankHolidays($yr) {
             while (count($dirPlayed->recentRemote) > (count($dirList) / 2)) {
               array_pop($dirPlayed->recentRemote);
             }
-            //Look for match
+            //Look for match, with iteration cap to prevent infinite loop
+            $attempts = 0;
+            $maxAttempts = count($dirList) * 2;
             do {
               $found = false;
               $pickedSlice = array_slice($dirList, $pick, 1);
@@ -1013,7 +912,8 @@ function calculateBankHolidays($yr) {
                   break;
                 }
               }
-            } while ($found === true);
+              $attempts++;
+            } while ($found === true && $attempts < $maxAttempts);
           }
           //Selected entry
           $pickedSlice = array_slice($dirList, $pick, 1);
@@ -1021,7 +921,7 @@ function calculateBankHolidays($yr) {
           $entry->whatSelectedRemote = $entry->what . '/' . $pickedSlice[0]['name'];
           //Append selected entry to list of recent
           if (!is_array($dirPlayed->recentRemote)) {
-            $dirPlayed->recentRemote = Array();
+            $dirPlayed->recentRemote = [];
           }
           array_unshift($dirPlayed->recentRemote, $dirPlayed->hashSelectedRemote);
           break;
@@ -1039,7 +939,7 @@ function calculateBankHolidays($yr) {
   }
 
   function playEntry ($index) {
-    global $stored;
+    global $stored, $tc;
     $played = 'nothing';
 
     $entry = $stored->list[ $stored->selectedPlayList ]->list[$index];
@@ -1053,7 +953,7 @@ function calculateBankHolidays($yr) {
     } else {
       if ($entry->mime === 'directory') {
         //If no selection made from last run then create an initial selection
-        if ((gettype($entry) === 'object') && (!property_exists($entry, 'whatSelectedRemote') || ($entry->whatSelectedRemote === '')))  {
+        if (is_object($entry) && (!property_exists($entry, 'whatSelectedRemote') || ($entry->whatSelectedRemote === '')))  {
           directorySelect($index);
         }
       } else {
@@ -1070,10 +970,10 @@ function calculateBankHolidays($yr) {
     }
 
     //Get id of any previously playing instance
-    $oldId = @exec( 'ps aux | grep -F -v grep | grep -F mplayer | grep -P -o "sid [0-9]+ -x [0-9]+$" | tr -cd "0-9\-"' );
+    $oldId = exec( 'ps aux | grep -F -v grep | grep -F mplayer | grep -P -o "sid [0-9]+ -x [0-9]+$" | tr -cd "0-9\-"' );
     //Kill any previously playing instance
     if (strlen($oldId) > 1) {
-      @exec( 'kill $( ps aux | grep -F -v grep | grep -F mplayer | awk \'{print $2}\' )' );
+      exec( 'kill $( ps aux | grep -F -v grep | grep -F mplayer | awk \'{print $2}\' )' );
     }
     $audioOutput = getMplayerAudioOutput();
     $chime = str_ends_with($entry->whatSelectedRemote, CHIME_START);
@@ -1091,24 +991,24 @@ function calculateBankHolidays($yr) {
     if ($entry->mime === 'directory') {
       //Selection for next time
       directorySelect($index);
-      put_stored ();
+      $tc->saveStored();
     }
     return ($played);
   }
 
   function stopPlayer() {
     //Recover initial volume level if player is playing
-    $oldId = @exec( 'ps aux | grep -F -v grep | grep -F mplayer | grep -P -o "sid [0-9]+ -x [0-9]+$" | tr -cd "0-9\-"');
+    $oldId = exec( 'ps aux | grep -F -v grep | grep -F mplayer | grep -P -o "sid [0-9]+ -x [0-9]+$" | tr -cd "0-9\-"');
     $devCardInfo = getDevCardInfo();
     $isMapped = getIsMapped();
     //Kill player if found
     if (strlen($oldId) > 1) {
-      @exec( 'kill $( ps aux | grep -F -v grep | grep -F mplayer | awk \'{print $2}\' )' );
+      exec( 'kill $( ps aux | grep -F -v grep | grep -F mplayer | awk \'{print $2}\' )' );
       //Restore initial level if known
       $initialLevel = -1;
       prepareMixer ($oldId, $devCardInfo, $controlId, $initialLevel, $isMapped);
       if ($initialLevel > 0) {
-        @exec('amixer ' . $devCardInfo . (($isMapped)?' -M set "' . $controlId . '" -- ' . voltoDb($initialLevel) . 'dB':' cset "' . $controlId . '" ' . $initialLevel));
+        exec('amixer ' . $devCardInfo . (($isMapped)?' -M set "' . $controlId . '" -- ' . voltoDb($initialLevel) . 'dB':' cset "' . $controlId . '" ' . $initialLevel));
       }
     }
   }
@@ -1117,7 +1017,7 @@ function calculateBankHolidays($yr) {
     $flunked = "";
     $os_commands = explode('|', OS_COMMANDS);
     foreach ($os_commands as $command) {
-      if (basename(@exec('which ' . $command )) !== "$command") {
+      if (basename(exec('which ' . $command )) !== "$command") {
         debugLog("Required OS command, ' . $command . ', not found");
         $flunked .= ', ' . $command;
       }
@@ -1126,27 +1026,29 @@ function calculateBankHolidays($yr) {
       die('Required OS command(s)' . $flunked . ', not found');
     }
   }
-  
+
   function debugLog($message) {
     if (DEBUG) {
       file_put_contents(DEBUGLOG, $message . "\n", FILE_APPEND);
-    }    
+    }
   }
-  
+
   function errorLog(Throwable $e) {
     $logEntry = 'File : ' . $e->getFile() . ', Line : ' . $e->getLine() . ', Message : ' . $e->getMessage() . "\n";
     file_put_contents(DEBUGLOG, $logEntry, FILE_APPEND);
   }
-  
+
   function updateCronJob($enabled) {
     $flagFile = SYSTEMDIR . '/scheduler_enabled';
-    
+
     if ($enabled) {
       file_put_contents($flagFile, date('c'));
       chmod($flagFile, 0664);
       debugLog("Scheduler enabled");
     } else {
-      @unlink($flagFile);
+      if (file_exists($flagFile)) {
+        unlink($flagFile);
+      }
       debugLog("Scheduler disabled");
     }
     return true;

@@ -1,9 +1,9 @@
 "use strict";
 
-var TC = new function () {
-  var TC = this;
+const TC = (() => {
+  const TC = {};
   TC.stored = {};
-  TC.stored.list = new Array();
+  TC.stored.list = [];
   TC.selectedRow = 0;
   TC.stored.selectedPlayList = -1;
   TC.playerIndex = -1;
@@ -42,17 +42,18 @@ var TC = new function () {
   
   //Scroll to the end of the playlist
   TC.scrollDownPlayList = function () {
-    var d = $('#playListTableDiv'), scrollPos = d.scrollTop();
+    const d = $('#playListTableDiv');
     if ( TC.stored.list[TC.stored.selectedPlayList].list.length === TC.selectedRow) {
       d.scrollTop(d.prop("scrollHeight"));
     }
   }
   
   TC.nudgeList = function (pickiBox) {
-    var boxBotLeft = pickiBox.offset().top + (pickiBox.height() * 3.3),
-        d = $('#playListTableDiv'), scrollPos = d.scrollTop(),
-        scrollWindowBotLeft = d.offset().top + d.height(),
-        offset = boxBotLeft - scrollWindowBotLeft;
+    const d = $('#playListTableDiv');
+    const boxBotLeft = pickiBox.offset().top + (pickiBox.height() * 3.3);
+    const scrollPos = d.scrollTop();
+    const scrollWindowBotLeft = d.offset().top + d.height();
+    const offset = boxBotLeft - scrollWindowBotLeft;
     
     if (offset > 0) {
       d.scrollTop(scrollPos + offset);
@@ -61,10 +62,10 @@ var TC = new function () {
   
   TC.convertTo24Hour = function (timeStr) {
     if (!timeStr) return '12:00';
-    var parts = timeStr.replace(/\s/g, '').split(':');
-    var hours = parseInt(parts[0]);
-    var minutes = parts[1] || '00';
-    var ampm = parts[2] || 'AM';
+    const parts = timeStr.replace(/\s/g, '').split(':');
+    let hours = parseInt(parts[0]);
+    const minutes = parts[1] || '00';
+    const ampm = parts[2] || 'AM';
     if (ampm === 'PM' && hours !== 12) hours += 12;
     if (ampm === 'AM' && hours === 12) hours = 0;
     return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
@@ -72,161 +73,128 @@ var TC = new function () {
 
   TC.convertTo12Hour = function (time24) {
     if (!time24) return '12 : 00 : AM';
-    var parts = time24.split(':');
-    var hours = parseInt(parts[0]);
-    var minutes = parts[1] || '00';
-    var ampm = hours >= 12 ? 'PM' : 'AM';
+    const parts = time24.split(':');
+    let hours = parseInt(parts[0]);
+    const minutes = parts[1] || '00';
+    const ampm = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12;
     if (hours === 0) hours = 12;
     return String(hours).padStart(2, '0') + ' : ' + minutes + ' : ' + ampm;
   };
 
   //Render the JS generated parts of the page
-  TC.renderAll = function () {
-    var listHtml = '', listSelHtml = '', len = 0, i = 0, ip1, listItem, scrollPos;
-    
-    TC.purifyList();
-   
+  TC.renderModeToggles = function () {
     $('#modeToggleButton').prop('checked', TC.system);
     $('#previewToggleButton').prop('checked', TC.systemPreview);
-    $('.preview-mode-container').css('visibility',(TC.system)?'visible':'hidden');
-    $('.mode-container').css('visibility',(TC.lan)?'visible':'hidden');
-    $('.audio-device-container').css('display',(TC.lan)?'block':'none');
-    
-    //Playlist selector
-    listSelHtml+='                  <table class="playListSelectorTable">\n';
-    listSelHtml+='                    <tbody>\n';
-    listSelHtml+='                      <tr id="playListSelRow">\n';
-    listSelHtml+='                        <td class="playListButtons d-flex gap-2 align-items-center">\n';
+    $('.preview-mode-container').css('visibility', TC.system ? 'visible' : 'hidden');
+    $('.mode-container').css('visibility', TC.lan ? 'visible' : 'hidden');
+    $('.audio-device-container').css('display', TC.lan ? 'block' : 'none');
+  };
+
+  TC.renderPlaylistSelector = function () {
+    let html = '<table class="playListSelectorTable"><tbody><tr id="playListSelRow">';
+    html += '<td class="playListButtons d-flex gap-2 align-items-center">';
     if (TC.stored.list.length === 0) {
-      listSelHtml+='                          <i class="bi bi-plus-circle" data-bs-toggle="modal" data-bs-target="#editPlaylistName" onclick="TC.playListAdd();" title="Add a playlist"></i>\n';
-      listSelHtml+='                        </td>\n';
-      listSelHtml+='                        <th class="small text-muted">Start a playlist</th>\n';
-      listSelHtml+='                      </tr>\n';
-      listSelHtml+='                    </tbody>\n';
-      listSelHtml+='                  </table>\n';
+      html += '<i class="bi bi-plus-circle" data-bs-toggle="modal" data-bs-target="#editPlaylistName" onclick="TC.playListAdd();" title="Add a playlist"></i>';
+      html += '</td><th class="small text-muted">Start a playlist</th></tr></tbody></table>';
     } else {
-      len = TC.stored.list[TC.stored.selectedPlayList].list.length;
-      listSelHtml+='                          <i class="bi bi-plus-circle" data-bs-toggle="modal" data-bs-target="#editPlaylistName" onclick="TC.playListAdd();" title="Add"></i>\n';
-      listSelHtml+='                          <i class="bi bi-copy" data-bs-toggle="modal" data-bs-target="#editPlaylistName" onclick="TC.playListCopy();" title="Copy"></i>\n';
-      listSelHtml+='                          <i class="bi bi-pencil-square" data-bs-toggle="modal" data-bs-target="#editPlaylistName" onclick="TC.playListEdit();" title="Rename"></i>\n';
-      listSelHtml+='                          <i class="bi bi-trash text-danger" data-bs-toggle="modal" data-bs-target="#confirmDeletePlaylist" onclick="TC.playListDelete();" title="Delete"></i>\n';
-      listSelHtml+='                        </td>\n';
-      listSelHtml+='                      </tr>\n';
-      listSelHtml+='                      <tr>\n';
-      listSelHtml+='                        <td colspan="2" class="pt-2">\n';
-      listSelHtml+='                          <select id="playListSelect" name="playList" class="form-select form-select-sm">\n';
-      for (i = 0; i < TC.stored.list.length; i++) {
-        listSelHtml+='                            <option value="' + TC.stored.list[i].name + '"' + ((i === TC.stored.selectedPlayList ) ? ' selected' : '') + '>' + TC.stored.list[i].name + '</option>\n';
+      html += '<i class="bi bi-plus-circle" data-bs-toggle="modal" data-bs-target="#editPlaylistName" onclick="TC.playListAdd();" title="Add"></i>';
+      html += '<i class="bi bi-copy" data-bs-toggle="modal" data-bs-target="#editPlaylistName" onclick="TC.playListCopy();" title="Copy"></i>';
+      html += '<i class="bi bi-pencil-square" data-bs-toggle="modal" data-bs-target="#editPlaylistName" onclick="TC.playListEdit();" title="Rename"></i>';
+      html += '<i class="bi bi-trash text-danger" data-bs-toggle="modal" data-bs-target="#confirmDeletePlaylist" onclick="TC.playListDelete();" title="Delete"></i>';
+      html += '</td></tr><tr><td colspan="2" class="pt-2">';
+      html += '<select id="playListSelect" name="playList" class="form-select form-select-sm">';
+      for (let i = 0; i < TC.stored.list.length; i++) {
+        html += '<option value="' + TC.stored.list[i].name + '"' + (i === TC.stored.selectedPlayList ? ' selected' : '') + '>' + TC.stored.list[i].name + '</option>';
       }
-      listSelHtml+='                         </select>\n';
-      listSelHtml+='                        </td>\n';
-      listSelHtml+='                      </tr>\n';
-      listSelHtml+='                    </tbody>\n';
-      listSelHtml+='                  </table>\n';
+      html += '</select></td></tr></tbody></table>';
     }
-    if (TC.stored.list.length > 0) {
-      listHtml+='        <div id="playListTableDiv" class="scrollable-area">\n';
-      if (len === 0) {
-        listHtml+='          <div class="playlist-empty text-center py-5">\n';
-        listHtml+='            <i class="bi bi-plus-circle action-icon add fs-1" data-bs-toggle="tooltip" title="Add row" onclick="TC.listAdd(0);"></i>\n';
-        listHtml+='            <div class="mt-3 text-muted">Playlist is empty. Click to add items.</div>\n';
-        listHtml+='          </div>\n';
-      } else {
-        listHtml+='          <div id="playListCards" class="playlist-cards">\n';
-        for (i = 0; i < len && TC.stored.selectedPlayList >= 0; i++) {
-          listItem = TC.stored.list[TC.stored.selectedPlayList].list[i];
-          if (!listItem.hasOwnProperty('what')) {
-            continue;
-          }
-          ip1 = i + 1;
-          var time24 = TC.convertTo24Hour(listItem.time);
-          listHtml+='            <div id="tableRow' + ip1 + '" class="playlist-item" onclick="TC.rowClick(' + ip1 + ');">\n';
-          listHtml+='              <div class="playlist-item-header">\n';
-          listHtml+='                <button type="button" class="btn btn-outline-secondary btn-sm content-what text-start text-truncate flex-grow-1" id="what' + ip1 + '" data-bs-toggle="modal" data-bs-target="#fileBrowserModal" onclick="event.stopPropagation();TC.openFileBrowser(' + ip1 + ');" title="' + listItem.what + '">' + TC.displayFileName(listItem.what, listItem.mime) + '</button>\n';
-          listHtml+='                <div class="playlist-item-actions">\n';
-          listHtml+='                  <select id="how' + ip1 + '" name="how' + ip1 + '" class="form-select form-select-sm content-how" onclick="event.stopPropagation();">\n';
-          listHtml+='                    <option value="single" ' + ((listItem.how === 'single') ? 'selected' : '') + '>Single</option>\n';
-          listHtml+='                    <option value="rand" ' + ((listItem.how === 'rand') ? 'selected' : '') + '>Random</option>\n';
-          listHtml+='                    <option value="seq" ' + ((listItem.how === 'seq') ? 'selected' : '') + '>Sequential</option>\n';
-          listHtml+='                  </select>\n';
-          listHtml+='                  <i class="bi bi-plus-circle action-icon add" title="Add After" onclick="event.stopPropagation();TC.listAdd(' + ip1 + ');"></i>\n';
-          listHtml+='                  <i class="bi bi-dash-circle action-icon remove" title="Remove" onclick="event.stopPropagation();TC.listDelete(' + ip1 + ');"></i>\n';
-          listHtml+='                </div>\n';
-          listHtml+='              </div>\n';
-          listHtml+='              <div class="playlist-item-schedule">\n';
-          listHtml+='                <span class="schedule-label">Schedule</span>\n';
-          listHtml+='                <select id="exception' + ip1 + '" name="exception' + ip1 + '" class="form-select form-select-sm">\n';
-          listHtml+='                  <option value="every" ' + ((listItem.exception === 'every') ? 'selected' : '') + '>Every</option>\n';
-          listHtml+='                  <option value="except" ' + ((listItem.exception === 'except') ? 'selected' : '') + '>Except</option>\n';
-          listHtml+='                  <option value="never" ' + ((listItem.exception === 'never') ? 'selected' : '') + '>Manual</option>\n';
-          listHtml+='                </select>\n';
-          listHtml+='                <select id="day' + ip1 + '" name="day' + ip1 + '" class="form-select form-select-sm schedule-day">\n';
-          listHtml+='                  <option value="day" ' + ((listItem.day === 'day') ? 'selected' : '') + '>Daily</option>\n';
-          listHtml+='                  <option value="monday" ' + ((listItem.day === 'monday') ? 'selected' : '') + '>Mon</option>\n';
-          listHtml+='                  <option value="tuesday" ' + ((listItem.day === 'tuesday') ? 'selected' : '') + '>Tue</option>\n';
-          listHtml+='                  <option value="wednesday" ' + ((listItem.day === 'wednesday') ? 'selected' : '') + '>Wed</option>\n';
-          listHtml+='                  <option value="thursday" ' + ((listItem.day === 'thursday') ? 'selected' : '') + '>Thu</option>\n';
-          listHtml+='                  <option value="friday" ' + ((listItem.day === 'friday') ? 'selected' : '') + '>Fri</option>\n';
-          listHtml+='                  <option value="saturday" ' + ((listItem.day === 'saturday') ? 'selected' : '') + '>Sat</option>\n';
-          listHtml+='                  <option value="sunday" ' + ((listItem.day === 'sunday') ? 'selected' : '') + '>Sun</option>\n';
-          listHtml+='                </select>\n';
-          listHtml+='                <select id="week' + ip1 + '" name="week' + ip1 + '" class="form-select form-select-sm schedule-week">\n';
-          listHtml+='                  <option value="all" ' + ((listItem.week === 'all') ? 'selected' : '') + '>All</option>\n';
-          listHtml+='                  <option value="1st" ' + ((listItem.week === '1st') ? 'selected' : '') + '>1st</option>\n';
-          listHtml+='                  <option value="2nd" ' + ((listItem.week === '2nd') ? 'selected' : '') + '>2nd</option>\n';
-          listHtml+='                  <option value="3rd" ' + ((listItem.week === '3rd') ? 'selected' : '') + '>3rd</option>\n';
-          listHtml+='                </select>\n';
-          listHtml+='                <button type="button" class="time_element btn btn-outline-secondary btn-sm" id="time' + ip1 + '" data-time="' + time24 + '" onclick="event.stopPropagation();TC.openTimePicker(' + ip1 + ');">' + TC.formatTimeDisplay(time24) + '</button>\n';
-          listHtml+='              </div>\n';
-          listHtml+='              <div class="playlist-item-controls">\n';
-          listHtml+='                <div class="control-group">\n';
-          listHtml+='                  <label class="control-label">Length</label>\n';
-          listHtml+='                  <select id="howLong' + ip1 + '" name="howLong' + ip1 + '" class="form-select form-select-sm">\n';
-          listHtml+='                    <option value="0" ' + ((listItem.howLong === '0') ? 'selected' : '') + '>Full</option>\n';
-          for (let s = 10; s <= 180; s += 10) {
-            listHtml+='                    <option value="' + s + '" ' + ((listItem.howLong == s) ? 'selected' : '') + '>' + s + 's</option>\n';
-          }
-          listHtml+='                  </select>\n';
-          listHtml+='                </div>\n';
-          listHtml+='                <div class="control-group control-group-volume slider-class">\n';
-          listHtml+='                  <label class="control-label">Volume</label>\n';
-          listHtml+='                  <div class="volume-control">\n';
-          listHtml+='                    <input id="volume' + ip1 + '" name="volume' + ip1 + '" type="range" min="0" max="99" value="' + listItem.volume + '" class="volume-slider" />\n';
-          listHtml+='                    <span class="volume-display">' + listItem.volume + '</span>\n';
-          listHtml+='                  </div>\n';
-          listHtml+='                </div>\n';
-          listHtml+='                <div class="control-group control-group-preview">\n';
-          listHtml+='                  <label class="control-label">Preview</label>\n';
-          listHtml+='                  <div class="preview-buttons">\n';
-          listHtml+='                    <i class="bi bi-play-circle-fill action-icon play" title="Preview" onclick="event.stopPropagation();TC.rowClick(' + ip1 + ');TC.play(' + ip1 + ', true);"></i>\n';
-          listHtml+='                    <i class="bi bi-stop-circle-fill action-icon stop" title="Stop" onclick="event.stopPropagation();TC.rowClick(' + ip1 + ');TC.stop(' + ip1 + ');"></i>\n';
-          listHtml+='                  </div>\n';
-          listHtml+='                </div>\n';
-          listHtml+='              </div>\n';
-          listHtml+='            </div>\n';
+    return html;
+  };
+
+  TC.renderPlaylistItems = function () {
+    if (TC.stored.list.length === 0) return '';
+    const len = TC.stored.list[TC.stored.selectedPlayList].list.length;
+    let html = '<div id="playListTableDiv" class="scrollable-area">';
+    if (len === 0) {
+      html += '<div class="playlist-empty text-center py-5">';
+      html += '<i class="bi bi-plus-circle action-icon add fs-1" data-bs-toggle="tooltip" title="Add row" onclick="TC.listAdd(0);"></i>';
+      html += '<div class="mt-3 text-muted">Playlist is empty. Click to add items.</div></div>';
+    } else {
+      html += '<div id="playListCards" class="playlist-cards">';
+      for (let i = 0; i < len && TC.stored.selectedPlayList >= 0; i++) {
+        const listItem = TC.stored.list[TC.stored.selectedPlayList].list[i];
+        if (!listItem.hasOwnProperty('what')) continue;
+        const ip1 = i + 1;
+        const time24 = TC.convertTo24Hour(listItem.time);
+        html += '<div id="tableRow' + ip1 + '" class="playlist-item" onclick="TC.rowClick(' + ip1 + ');">';
+        html += '<div class="playlist-item-header">';
+        html += '<button type="button" class="btn btn-outline-secondary btn-sm content-what text-start text-truncate flex-grow-1" id="what' + ip1 + '" data-bs-toggle="modal" data-bs-target="#fileBrowserModal" onclick="event.stopPropagation();TC.openFileBrowser(' + ip1 + ');" title="' + listItem.what + '">' + TC.displayFileName(listItem.what, listItem.mime) + '</button>';
+        html += '<div class="playlist-item-actions">';
+        html += '<select id="how' + ip1 + '" name="how' + ip1 + '" class="form-select form-select-sm content-how" onclick="event.stopPropagation();">';
+        html += '<option value="single" ' + (listItem.how === 'single' ? 'selected' : '') + '>Single</option>';
+        html += '<option value="rand" ' + (listItem.how === 'rand' ? 'selected' : '') + '>Random</option>';
+        html += '<option value="seq" ' + (listItem.how === 'seq' ? 'selected' : '') + '>Sequential</option>';
+        html += '</select>';
+        html += '<i class="bi bi-plus-circle action-icon add" title="Add After" onclick="event.stopPropagation();TC.listAdd(' + ip1 + ');"></i>';
+        html += '<i class="bi bi-dash-circle action-icon remove" title="Remove" onclick="event.stopPropagation();TC.listDelete(' + ip1 + ');"></i>';
+        html += '</div></div>';
+        html += '<div class="playlist-item-schedule"><span class="schedule-label">Schedule</span>';
+        html += '<select id="exception' + ip1 + '" name="exception' + ip1 + '" class="form-select form-select-sm">';
+        html += '<option value="every" ' + (listItem.exception === 'every' ? 'selected' : '') + '>Every</option>';
+        html += '<option value="except" ' + (listItem.exception === 'except' ? 'selected' : '') + '>Except</option>';
+        html += '<option value="never" ' + (listItem.exception === 'never' ? 'selected' : '') + '>Manual</option>';
+        html += '</select>';
+        html += '<select id="day' + ip1 + '" name="day' + ip1 + '" class="form-select form-select-sm schedule-day">';
+        html += '<option value="day" ' + (listItem.day === 'day' ? 'selected' : '') + '>Daily</option>';
+        html += '<option value="monday" ' + (listItem.day === 'monday' ? 'selected' : '') + '>Mon</option>';
+        html += '<option value="tuesday" ' + (listItem.day === 'tuesday' ? 'selected' : '') + '>Tue</option>';
+        html += '<option value="wednesday" ' + (listItem.day === 'wednesday' ? 'selected' : '') + '>Wed</option>';
+        html += '<option value="thursday" ' + (listItem.day === 'thursday' ? 'selected' : '') + '>Thu</option>';
+        html += '<option value="friday" ' + (listItem.day === 'friday' ? 'selected' : '') + '>Fri</option>';
+        html += '<option value="saturday" ' + (listItem.day === 'saturday' ? 'selected' : '') + '>Sat</option>';
+        html += '<option value="sunday" ' + (listItem.day === 'sunday' ? 'selected' : '') + '>Sun</option>';
+        html += '</select>';
+        html += '<select id="week' + ip1 + '" name="week' + ip1 + '" class="form-select form-select-sm schedule-week">';
+        html += '<option value="all" ' + (listItem.week === 'all' ? 'selected' : '') + '>All</option>';
+        html += '<option value="1st" ' + (listItem.week === '1st' ? 'selected' : '') + '>1st</option>';
+        html += '<option value="2nd" ' + (listItem.week === '2nd' ? 'selected' : '') + '>2nd</option>';
+        html += '<option value="3rd" ' + (listItem.week === '3rd' ? 'selected' : '') + '>3rd</option>';
+        html += '</select>';
+        html += '<button type="button" class="time_element btn btn-outline-secondary btn-sm" id="time' + ip1 + '" data-time="' + time24 + '" onclick="event.stopPropagation();TC.openTimePicker(' + ip1 + ');">' + TC.formatTimeDisplay(time24) + '</button>';
+        html += '</div>';
+        html += '<div class="playlist-item-controls">';
+        html += '<div class="control-group"><label class="control-label">Length</label>';
+        html += '<select id="howLong' + ip1 + '" name="howLong' + ip1 + '" class="form-select form-select-sm">';
+        html += '<option value="0" ' + (String(listItem.howLong) === '0' ? 'selected' : '') + '>Full</option>';
+        for (let s = 10; s <= 180; s += 10) {
+          html += '<option value="' + s + '" ' + (String(listItem.howLong) === String(s) ? 'selected' : '') + '>' + s + 's</option>';
         }
-        listHtml+='          </div>\n';
+        html += '</select></div>';
+        html += '<div class="control-group control-group-volume slider-class">';
+        html += '<label class="control-label">Volume</label>';
+        html += '<div class="volume-control">';
+        html += '<input id="volume' + ip1 + '" name="volume' + ip1 + '" type="range" min="0" max="99" value="' + listItem.volume + '" class="volume-slider" />';
+        html += '<span class="volume-display">' + listItem.volume + '</span>';
+        html += '</div></div>';
+        html += '<div class="control-group control-group-preview"><label class="control-label">Preview</label>';
+        html += '<div class="preview-buttons">';
+        html += '<i class="bi bi-play-circle-fill action-icon play" title="Preview" onclick="event.stopPropagation();TC.rowClick(' + ip1 + ');TC.play(' + ip1 + ', true);"></i>';
+        html += '<i class="bi bi-stop-circle-fill action-icon stop" title="Stop" onclick="event.stopPropagation();TC.rowClick(' + ip1 + ');TC.stop(' + ip1 + ');"></i>';
+        html += '</div></div></div></div>';
       }
-      listHtml+='        </div>\n';
+      html += '</div>';
     }
-    $( '#playListSelector' ).empty().append( listSelHtml );
-    //Preserve scroll position while re-rendering playlist
-    scrollPos = $('#playListTableDiv').scrollTop();
-    $( '#playList' ).empty().append( listHtml );
-    //Restore scroll position
-    $('#playListTableDiv').scrollTop(scrollPos);
-    //Initialise tooltip
-    $('[data-bs-toggle="tooltip"]').tooltip();
-    //Click event trap
-    $('#playListForm').off('propertychange change keyup paste input').on('propertychange change keyup paste input', function (event) {
-      TC.formChange(event);
-    });
-    //Volume slider events
-    $('.volume-slider').on('input', function (e) {
-      var volControl = $(this),
-          index = volControl[0].id.replace(/[^\d]/g, '') - 1,
-          value = parseInt(volControl.val());
+    html += '</div>';
+    return html;
+  };
+
+  TC.attachItemEventHandlers = function () {
+    //Volume slider events — delegated so re-attachment on every render is not needed
+    $(document).on('input', '.volume-slider', function (e) {
+      const volControl = $(this);
+      const index = volControl[0].id.replace(/[^\d]/g, '') - 1;
+      const value = parseInt(volControl.val());
       volControl.siblings('.volume-display').text(value);
       TC.stored.list[TC.stored.selectedPlayList].list[index]['volume'] = value;
       if ((TC.playerIndex === index) && (!TC.fading)) {
@@ -235,20 +203,19 @@ var TC = new function () {
           $('#audioPlayer').prop('volume', TC.compositeVolume() / 100);
         }
         if (TC.system && TC.serverAvailable) {
-          $.ajax({ url: 'php/tc.php?action=setVolume&index=' + index + '&volume=' + value,
+          $.ajax({ url: 'php/tc.php?action=setVolume&index=' + encodeURIComponent(index) + '&volume=' + encodeURIComponent(value),
             error: function (xhr) { console.error(xhr.status + ': ' + xhr.responseText); }
           });
         }
       }
       TC.storeAll(false);
     });
-    //Scroll wheel on volume control
-    $('.slider-class').on('wheel', function (e) {
-      var delta = e.originalEvent.deltaY,
-          volControl = $(this).find('.volume-slider'),
-          index = volControl[0].id.replace(/[^\d]/g, '') - 1,
-          currentVal = parseInt(volControl.val()),
-          newVal = currentVal + ((delta < 0) ? 1 : -1);
+    //Scroll wheel on volume control — delegated
+    $(document).on('wheel', '.slider-class', function (e) {
+      const volControl = $(this).find('.volume-slider');
+      const index = volControl[0].id.replace(/[^\d]/g, '') - 1;
+      const currentVal = parseInt(volControl.val());
+      let newVal = currentVal + (e.originalEvent.deltaY < 0 ? 1 : -1);
       newVal = Math.max(0, Math.min(99, newVal));
       volControl.val(newVal);
       volControl.siblings('.volume-display').text(newVal);
@@ -259,7 +226,7 @@ var TC = new function () {
           $('#audioPlayer').prop('volume', TC.compositeVolume() / 100);
         }
         if (TC.system && TC.serverAvailable) {
-          $.ajax({ url: 'php/tc.php?action=setVolume&index=' + index + '&volume=' + newVal,
+          $.ajax({ url: 'php/tc.php?action=setVolume&index=' + encodeURIComponent(index) + '&volume=' + encodeURIComponent(newVal),
             error: function (xhr) { console.error(xhr.status + ': ' + xhr.responseText); }
           });
         }
@@ -267,16 +234,27 @@ var TC = new function () {
       TC.storeAll(false);
       e.preventDefault();
     });
-    //Prime Playlist popup form
+  };
+
+  TC.renderAll = function () {
+    TC.purifyList();
+    TC.renderModeToggles();
+    $('#playListSelector').empty().append(TC.renderPlaylistSelector());
+    const scrollPos = $('#playListTableDiv').scrollTop();
+    $('#playList').empty().append(TC.renderPlaylistItems());
+    $('#playListTableDiv').scrollTop(scrollPos);
+    $('[data-bs-toggle="tooltip"]').tooltip();
+    $('#playListForm').off('propertychange change keyup paste input')
+      .on('propertychange change keyup paste input', function (event) {
+        TC.formChange(event);
+      });
     if (TC.stored.list.length > 0) {
       $('#playListNameInput').val(TC.stored.list[TC.stored.selectedPlayList].name);
     }
-    //Validate
     TC.validate();
-    //Update cookie
     TC.storeAll(false);
   };
-  
+
   //Save the persistent data
   TC.storeAll = function ( endTimeout ) {
     TC.purifyList();
@@ -320,7 +298,7 @@ var TC = new function () {
     
   //Get the persistent data
   TC.loadAll = function () {
-    var storedJson;
+    let storedJson;
     
     storedJson = localStorage.getItem('tcPersistent');
     
@@ -342,7 +320,7 @@ var TC = new function () {
   }
   
   TC.purifyList = function () {
-    var i, len, listItem, doneStuff;
+    let i, len, listItem, doneStuff;
     
     if (TC.stored.selectedPlayList >= 0) {
       do {
@@ -388,7 +366,7 @@ var TC = new function () {
       how : 'single',
       volume : 80,
       howLong : 0,
-      lastPlay : Array()
+      lastPlay : []
     }
   }
   //Add a new item to playlist
@@ -396,14 +374,14 @@ var TC = new function () {
     event.preventDefault();
     event.stopPropagation();
     
-    var newTime = '12 : 00 : AM';
-    
+    let newTime = '12 : 00 : AM';
+
     //Copy previous time if not first item and add one hour
     if (TC.stored.list[TC.stored.selectedPlayList].list.length > 0) {
-      var prevTime = TC.stored.list[TC.stored.selectedPlayList].list[i - 1].time;
-      var time24 = TC.convertTo24Hour(prevTime);
-      var parts = time24.split(':');
-      var hours = (parseInt(parts[0]) + 1) % 24;
+      const prevTime = TC.stored.list[TC.stored.selectedPlayList].list[i - 1].time;
+      const time24 = TC.convertTo24Hour(prevTime);
+      const parts = time24.split(':');
+      const hours = (parseInt(parts[0]) + 1) % 24;
       newTime = TC.convertTo12Hour(String(hours).padStart(2, '0') + ':' + parts[1]);
     }
     
@@ -455,7 +433,7 @@ var TC = new function () {
     
   //Validate and correct/default the form
   TC.validate = function () {
-    var i, listItem, ip1, changed = false, len;
+    let i, listItem, ip1, changed = false, len;
         
     if ((TC.hasOwnProperty('stored')) && (TC.stored.hasOwnProperty('list')) && 
         (TC.stored.hasOwnProperty('selectedPlayList')) &&
@@ -516,13 +494,15 @@ var TC = new function () {
   }
   
   TC.directorySelect = function ( phash, dirList ) {
-    var i, pick, found = false, keys = Object.keys( dirList ),
-      playList = TC.stored.list[TC.stored.selectedPlayList],
-      entry = playList.list[TC.selectedRow - 1], dirPlayed;
+    let i, pick, found = false;
+    const keys = Object.keys( dirList );
+    const playList = TC.stored.list[TC.stored.selectedPlayList];
+    const entry = playList.list[TC.selectedRow - 1];
+    let dirPlayed;
     
     //Create lastPlay if not existing
     if (!playList.hasOwnProperty( 'lastPlay' )) {
-      playList.lastPlay = Array();
+      playList.lastPlay = [];
     }
       
     //Create last play directory if not existing for directory
@@ -530,8 +510,8 @@ var TC = new function () {
       playList.lastPlay[phash] = {
         hashSelectedLocal : '', 
         hashSelectedRemote : '',
-        recentLocal : Array(),
-        recentRemote : Array()
+        recentLocal : [],
+        recentRemote : []
       };
     }
     
@@ -570,7 +550,7 @@ var TC = new function () {
         }
         if (keys.length > 0) {
           if (!dirPlayed.recentLocal) {
-            dirPlayed.recentLocal = Array();
+            dirPlayed.recentLocal = [];
           }
           //Default pick
           pick = Math.floor( Math.random() * keys.length );
@@ -617,8 +597,8 @@ var TC = new function () {
 
   TC.displayFileName = function (what, mime) {
     if (!what) return 'Select...';
-    var icon = (mime === 'directory') ? '<i class="bi bi-folder-fill text-warning me-1"></i>' : '<i class="bi bi-music-note text-primary me-1"></i>';
-    var name = what.split('/').pop();
+    const icon = (mime === 'directory') ? '<i class="bi bi-folder-fill text-warning me-1"></i>' : '<i class="bi bi-music-note text-primary me-1"></i>';
+    const name = what.split('/').pop();
     return icon + name;
   };
 
@@ -631,7 +611,7 @@ var TC = new function () {
 
   TC.loadFileBrowserContents = function (hash) {
     TC.fileBrowserCurrentHash = hash;
-    var container = $('#fileBrowserContents');
+    const container = $('#fileBrowserContents');
     container.html('<div class="text-center p-4"><i class="bi bi-arrow-repeat spin"></i> Loading...</div>');
     
     $.ajax({
@@ -648,17 +628,17 @@ var TC = new function () {
   };
 
   TC.renderFileBrowser = function (files) {
-    var html = '', i, file;
-    
+    let html = '';
+
     html += '<div class="list-group list-group-flush">';
-    
+
     if (TC.fileBrowserPath.length > 0) {
       html += '<a href="#" class="list-group-item list-group-item-action fb-back">';
       html += '<i class="bi bi-arrow-left me-2"></i>.. Back</a>';
     }
-    
-    for (i = 0; i < files.length; i++) {
-      file = files[i];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       if (file.mime === 'directory') {
         html += '<div class="list-group-item d-flex justify-content-between align-items-center fb-item" ';
         html += 'data-hash="' + TC.escapeHtml(file.hash || '') + '" data-name="' + TC.escapeHtml(file.name) + '" data-path="' + TC.escapeHtml(file.path) + '" data-mime="directory">';
@@ -700,34 +680,34 @@ var TC = new function () {
       TC.fileBrowserGoUp();
     }).on('click', '.fb-dir', function (e) {
       e.preventDefault();
-      var $el = $(this).closest('.fb-item');
-      TC.fileBrowserEnterDir($el.attr('data-hash'), $el.attr('data-name'));
+      const $fbEl1 = $(this).closest('.fb-item');
+      TC.fileBrowserEnterDir($fbEl1.attr('data-hash'), $fbEl1.attr('data-name'));
     }).on('click', '.fb-select-dir', function (e) {
       e.preventDefault();
       e.stopPropagation();
-      var $el = $(this).closest('.fb-item');
-      TC.fileBrowserSelectItem($el.attr('data-path'), $el.attr('data-hash'), 'directory');
+      const $fbEl2 = $(this).closest('.fb-item');
+      TC.fileBrowserSelectItem($fbEl2.attr('data-path'), $fbEl2.attr('data-hash'), 'directory');
     }).on('click', '.fb-file', function (e) {
       e.preventDefault();
-      var $el = $(this).closest('.fb-item');
-      TC.fileBrowserSelectItem($el.attr('data-path'), $el.attr('data-hash'), $el.attr('data-mime'));
+      const $fbEl3 = $(this).closest('.fb-item');
+      TC.fileBrowserSelectItem($fbEl3.attr('data-path'), $fbEl3.attr('data-hash'), $fbEl3.attr('data-mime'));
     }).on('click', '.fb-rename', function (e) {
       e.preventDefault();
       e.stopPropagation();
-      var $el = $(this).closest('.fb-item');
-      TC.fileBrowserRename($el.attr('data-path'), $el.attr('data-name'));
+      const $fbEl4 = $(this).closest('.fb-item');
+      TC.fileBrowserRename($fbEl4.attr('data-path'), $fbEl4.attr('data-name'));
     }).on('click', '.fb-delete', function (e) {
       e.preventDefault();
       e.stopPropagation();
-      var $el = $(this).closest('.fb-item');
-      TC.fileBrowserDelete($el.attr('data-path'), $el.attr('data-name'));
+      const $fbEl5 = $(this).closest('.fb-item');
+      TC.fileBrowserDelete($fbEl5.attr('data-path'), $fbEl5.attr('data-name'));
     });
   };
 
   TC.fileBrowserNewFolder = function () {
-    var name = prompt('Enter folder name:');
+    const name = prompt('Enter folder name:');
     if (name && name.trim()) {
-      var currentPath = TC.fileBrowserPath.map(function(p) { return p.name; }).join('/');
+      const currentPath = TC.fileBrowserPath.map(function(p) { return p.name; }).join('/');
       $.ajax({
         url: 'php/tc.php',
         method: 'POST',
@@ -749,17 +729,17 @@ var TC = new function () {
 
   TC.fileBrowserUpload = function (files) {
     if (!files || files.length === 0) return;
-    
-    var formData = new FormData();
+
+    const formData = new FormData();
     formData.append('action', 'uploadFile');
-    var currentPath = TC.fileBrowserPath.map(function(p) { return p.name; }).join('/');
+    const currentPath = TC.fileBrowserPath.map(function(p) { return p.name; }).join('/');
     formData.append('path', currentPath);
-    
-    for (var i = 0; i < files.length; i++) {
+
+    for (let i = 0; i < files.length; i++) {
       formData.append('files[]', files[i]);
     }
-    
-    var container = $('#fileBrowserContents');
+
+    const container = $('#fileBrowserContents');
     container.html('<div class="text-center p-4"><i class="bi bi-arrow-repeat spin"></i> Uploading...</div>');
     
     $.ajax({
@@ -789,7 +769,7 @@ var TC = new function () {
   };
 
   TC.fileBrowserRename = function (path, currentName) {
-    var newName = prompt('Enter new name:', currentName);
+    const newName = prompt('Enter new name:', currentName);
     if (newName && newName.trim() && newName !== currentName) {
       $.ajax({
         url: 'php/tc.php',
@@ -837,8 +817,8 @@ var TC = new function () {
   };
 
   TC.updateBreadcrumb = function () {
-    var html = '<span class="text-muted">Music</span>';
-    for (var i = 0; i < TC.fileBrowserPath.length; i++) {
+    let html = '<span class="text-muted">Music</span>';
+    for (let i = 0; i < TC.fileBrowserPath.length; i++) {
       html += ' <i class="bi bi-chevron-right small text-muted"></i> ' + TC.escapeHtml(TC.fileBrowserPath[i].name);
     }
     $('#fileBrowserBreadcrumb').html(html);
@@ -851,12 +831,12 @@ var TC = new function () {
 
   TC.fileBrowserGoUp = function () {
     TC.fileBrowserPath.pop();
-    var parentHash = TC.fileBrowserPath.length > 0 ? TC.fileBrowserPath[TC.fileBrowserPath.length - 1].hash : '';
+    const parentHash = TC.fileBrowserPath.length > 0 ? TC.fileBrowserPath[TC.fileBrowserPath.length - 1].hash : '';
     TC.loadFileBrowserContents(parentHash);
   };
 
   TC.fileBrowserSelectItem = function (path, hash, mime) {
-    var entry = TC.stored.list[TC.stored.selectedPlayList].list[TC.fileBrowserRow - 1];
+    const entry = TC.stored.list[TC.stored.selectedPlayList].list[TC.fileBrowserRow - 1];
     
     entry.what = path;
     entry.hash = hash;
@@ -868,12 +848,13 @@ var TC = new function () {
     if (mime === 'directory') {
       TC.validate();
       $.ajax({
-        url: 'php/tc.php?action=listFiles&phash=' + hash,
-        error: function (xhr) {
-          console.error(xhr.status + ': ' + xhr.responseText);
-        }
-      }).always(function (data) {
-        TC.directorySelect(hash, JSON.parse(data));
+        url: 'php/tc.php?action=listFiles&phash=' + encodeURIComponent(hash),
+        dataType: 'json'
+      }).done(function (data) {
+        TC.directorySelect(hash, data);
+        TC.storeAll(false);
+      }).fail(function (xhr) {
+        console.error(xhr.status + ': ' + xhr.responseText);
         TC.storeAll(false);
       });
     } else {
@@ -885,41 +866,6 @@ var TC = new function () {
   };
 
   //Copy selected file item to selected "What" column and array
-  TC.fileSelect = function (path, hash, mime) {
-    var shortName, playList, entry, id;
-    
-    if (TC.selectedRow > 0) {
-      shortName = path.replace('Music/', '');
-      id = '#what' + TC.selectedRow;
-      playList = TC.stored.list[TC.stored.selectedPlayList];
-      entry = playList.list[TC.selectedRow - 1];
-      entry.what = shortName;
-      entry.hash = hash;
-      entry.mime = mime;
-      $(id).prop('title', shortName);
-      $(id).val(shortName);
-      //Set up tooltips
-      $(id).tooltip();
-      $(id).scrollLeft(999);
-      if (mime === 'directory') {
-        TC.validate();
-        $.ajax({ url: 'php/tc.php?action=listFiles&phash=' + entry.hash,
-          error: function (xhr) {
-            console.error(xhr.status + ': ' + xhr.responseText)
-          }
-        }).always(function ( data ) {
-          TC.directorySelect(entry.hash, JSON.parse( data )) ;
-          TC.storeAll(false);
-        });
-      } else {
-        entry.hashSelectedLocal = entry.hash;
-        entry.whatSelectedLocal = entry.what;
-        TC.validate();
-        TC.storeAll(false);
-      }
-    }
-  };
-  
   // Find volume of individual file given by hash
   TC.fileVolume = function(fileHash) {
     if (!fileHash) {
@@ -933,8 +879,8 @@ var TC = new function () {
   }
   //Return the composite volume of the playing file and selected item
   TC.compositeVolume = function() {
-    var compositeVolume,
-      entry=TC.stored.list[TC.stored.selectedPlayList].list[TC.playerIndex];
+    let compositeVolume;
+    const entry = TC.stored.list[TC.stored.selectedPlayList].list[TC.playerIndex];
     
     if (entry.hasOwnProperty('hashSelectedLocal') && entry.hashSelectedLocal ) {
       compositeVolume = Math.floor((TC.fileVolume(entry.hashSelectedLocal) * entry.volume) / 80);
@@ -956,7 +902,8 @@ var TC = new function () {
   }
   //Return the item volume from the player volume taking into account the volume of the playing file
   TC.reverseCompositeVolume = function (compositeVolume) {
-    var entryVolume, entry=TC.stored.list[TC.stored.selectedPlayList].list[TC.playerIndex];
+    const entry = TC.stored.list[TC.stored.selectedPlayList].list[TC.playerIndex];
+    let entryVolume;
     
     compositeVolume = (Math.log10(compositeVolume + 1) * 50) - 1;
     
@@ -974,7 +921,7 @@ var TC = new function () {
   
   //Catch changes to selectors and volume
   TC.formChange = function (event) {
-    var prop, index, value;
+    let prop, index, value;
     if (event.target.id && (event.target.value !== undefined)) {
       TC.validate();
       switch (event.target.id) {
@@ -1022,10 +969,10 @@ var TC = new function () {
 
   TC.formatTimeDisplay = function (time24) {
     if (!time24) return '12:00 AM';
-    var parts = time24.split(':');
-    var hours = parseInt(parts[0]);
-    var minutes = parts[1] || '00';
-    var ampm = hours >= 12 ? 'PM' : 'AM';
+    const parts = time24.split(':');
+    let hours = parseInt(parts[0]);
+    const minutes = parts[1] || '00';
+    const ampm = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12;
     if (hours === 0) hours = 12;
     return hours + ':' + minutes + ' ' + ampm;
@@ -1035,11 +982,11 @@ var TC = new function () {
 
   TC.openTimePicker = function (rowIndex) {
     TC.timePickerIndex = rowIndex;
-    var currentTime = $('#time' + rowIndex).attr('data-time') || '12:00';
-    var parts = currentTime.split(':');
-    var hours = parseInt(parts[0]);
-    var minutes = parseInt(parts[1]) || 0;
-    var ampm = hours >= 12 ? 'PM' : 'AM';
+    const currentTime = $('#time' + rowIndex).attr('data-time') || '12:00';
+    const parts = currentTime.split(':');
+    let hours = parseInt(parts[0]);
+    const minutes = parseInt(parts[1]) || 0;
+    const ampm = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12;
     if (hours === 0) hours = 12;
 
@@ -1053,27 +1000,27 @@ var TC = new function () {
       $('#tpPM').addClass('active');
     }
 
-    var modal = new bootstrap.Modal(document.getElementById('timePickerModal'));
+    const modal = new bootstrap.Modal(document.getElementById('timePickerModal'));
     modal.show();
   };
 
   TC.confirmTimePicker = function () {
-    var hours = parseInt($('#tpHour').val());
-    var minutes = $('#tpMinute').val();
-    var ampm = $('#tpPM').hasClass('active') ? 'PM' : 'AM';
+    let hours = parseInt($('#tpHour').val());
+    const minutes = $('#tpMinute').val();
+    const ampm = $('#tpPM').hasClass('active') ? 'PM' : 'AM';
 
     if (ampm === 'PM' && hours !== 12) hours += 12;
     if (ampm === 'AM' && hours === 12) hours = 0;
 
-    var time24 = String(hours).padStart(2, '0') + ':' + minutes;
+    const time24 = String(hours).padStart(2, '0') + ':' + minutes;
     TC.timeChanged(TC.timePickerIndex - 1, time24);
 
     bootstrap.Modal.getInstance(document.getElementById('timePickerModal')).hide();
   };
 
   TC.adjustTime = function (field, delta) {
-    var $field = $('#tp' + field);
-    var val = parseInt($field.val());
+    const $field = $('#tp' + field);
+    let val = parseInt($field.val());
     
     if (field === 'Hour') {
       val += delta;
@@ -1096,7 +1043,7 @@ var TC = new function () {
   
   TC.bindPlayListInput = function () {
     $('#playListNameDone').click(function () {
-      var value = $('#playListNameInput')[0].value;
+      const value = $('#playListNameInput')[0].value;
       
       if (value.length > 0) {
         TC.stored.list[TC.stored.selectedPlayList].name = value;
@@ -1119,8 +1066,9 @@ var TC = new function () {
   
   //Fadeout processing
   TC.howLong = function () {
-    var entry = TC.stored.list[TC.stored.selectedPlayList].list[TC.playerIndex],
-        player = $('#audioPlayer'), stamp = Date.now().toString();
+    const entry = TC.stored.list[TC.stored.selectedPlayList].list[TC.playerIndex];
+    const player = $('#audioPlayer');
+    const stamp = Date.now().toString();
     
     //Plan fade out event after howLong seconds
     player.attr('playStamp', stamp);
@@ -1149,10 +1097,9 @@ var TC = new function () {
   
   //Handle media preview
   TC.play = function ( index, previewCall ) {
-    
-    var entry = TC.stored.list[TC.stored.selectedPlayList].list[index - 1],
-        source, compositeVolume,
-        player = $('#audioPlayer'), fileVolume = 100;
+    const entry = TC.stored.list[TC.stored.selectedPlayList].list[index - 1];
+    const player = $('#audioPlayer');
+    let source, compositeVolume;
     
     if (!entry || !entry.what) {
       console.error('No valid entry to play at index ' + index);
@@ -1197,19 +1144,19 @@ var TC = new function () {
     
     //Choose next track
     if (entry.mime === 'directory') {
-      $.ajax({ url: 'php/tc.php?action=listFiles&phash=' + entry.hash,
-        error: function (xhr) {
-          console.error(xhr.status + ': ' + xhr.responseText)
-        }
-      }).always(function ( data ) {
-        TC.directorySelect(entry.hash, JSON.parse( data )) ;
+      $.ajax({ url: 'php/tc.php?action=listFiles&phash=' + encodeURIComponent(entry.hash),
+        dataType: 'json'
+      }).done(function (data) {
+        TC.directorySelect(entry.hash, data);
         TC.storeAll(false);
+      }).fail(function (xhr) {
+        console.error(xhr.status + ': ' + xhr.responseText);
       });
     }
   }
   
   TC.stop = function ( index ) {
-    var player = $('#audioPlayer');
+    const player = $('#audioPlayer');
 
     if (TC.system && TC.systemPreview) {
       $.ajax({ url: 'php/tc.php?action=stop',
@@ -1223,8 +1170,8 @@ var TC = new function () {
   }
 
   TC.sortCompareTime = function (a, b) {
-    var aBits = TC.timeToBits(a.time),
-        bBits = TC.timeToBits(b.time);
+    const aBits = TC.timeToBits(a.time);
+    const bBits = TC.timeToBits(b.time);
         
     if (aBits[0] < bBits[0]) {
       return -1;
@@ -1241,7 +1188,7 @@ var TC = new function () {
   }
     
   TC.SortPlaylist = function () {
-    var len, list, i, needsSorting = false;
+    let len, list, i, needsSorting = false;
     
     if (TC.stored.selectedPlayList >= 0) {
       len = TC.stored.list[TC.stored.selectedPlayList].list.length;
@@ -1262,7 +1209,7 @@ var TC = new function () {
   
   //Convert time to 24 hour format in integers
   TC.timeToBits = function (eventTime) {
-    var timeBits = eventTime.replace(/\s/g, '').split(':');
+    const timeBits = eventTime.replace(/\s/g, '').split(':');
     //Convert AM/PM + hour to 24 hour
     timeBits[0] = parseInt(timeBits[0]);
     if (timeBits[0] === 12) {
@@ -1278,12 +1225,13 @@ var TC = new function () {
   }
   
   TC.nextEvent = function (d) {
-    var bestTime = -1, len,
-        listItem, i, timeBits,
-        weekNumber = parseInt(d.getDate() / 7) + 1, day = d.getDay(), dayMatch,
-        hour = d.getHours(), minute = d.getMinutes(),
-        weekDay = [ 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday' ],
-        itemDate = new Date();
+    let bestTime = -1, len, listItem, i, timeBits, dayMatch;
+    const weekNumber = parseInt(d.getDate() / 7) + 1;
+    const day = d.getDay();
+    const hour = d.getHours();
+    const minute = d.getMinutes();
+    const weekDay = [ 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday' ];
+    const itemDate = new Date();
 
     if (TC.stored.selectedPlayList >= 0) {
       len = TC.stored.list[TC.stored.selectedPlayList].list.length;
@@ -1339,7 +1287,7 @@ var TC = new function () {
   TC.eventClock = function () {
    //Check time every 1000 ms
     setInterval(function () {
-      var d = new Date(), minuteNow = d.getMinutes(), hourNow = d.getHours(), beenSleeping = ((d.getTime() - TC.lastTimeLoop) > 10000);
+      const d = new Date(), minuteNow = d.getMinutes(), hourNow = d.getHours(), beenSleeping = ((d.getTime() - TC.lastTimeLoop) > 10000);
       
       TC.lastTimeLoop = d.getTime();
      
@@ -1405,7 +1353,7 @@ var TC = new function () {
   };
   
   TC.refreshAudioDevices = function () {
-    var $btn = $('.audio-device-container .bi-arrow-clockwise');
+    const $btn = $('.audio-device-container .bi-arrow-clockwise');
     $btn.addClass('spin');
     $.ajax({
       url: 'php/tc.php?action=audioDevices',
@@ -1422,11 +1370,11 @@ var TC = new function () {
   };
   
   TC.renderAudioDeviceSelector = function () {
-    var $select = $('#audioDeviceSelect'),
-        html = '', i, device;
+    const $select = $('#audioDeviceSelect');
+    let html = '';
     
-    for (i = 0; i < TC.audioDevices.length; i++) {
-      device = TC.audioDevices[i];
+    for (let i = 0; i < TC.audioDevices.length; i++) {
+      const device = TC.audioDevices[i];
       html += '<option value="' + TC.escapeHtml(device.id) + '"';
       if (device.id === TC.selectedAudioDevice) {
         html += ' selected';
@@ -1458,12 +1406,13 @@ var TC = new function () {
   };
   
   TC.init2 = function () {
-    var currentTimeZone = moment.tz.guess();
-     
+    const currentTimeZone = moment.tz.guess();
+
     TC.loadAll();
     TC.purifyList();
     TC.renderAll();
     TC.bindPlayListInput();
+    TC.attachItemEventHandlers();
     TC.eventClock();
     TC.loaded = true;
     
@@ -1500,11 +1449,11 @@ var TC = new function () {
       }      
     });
     $('#audioPlayer').bind('volumechange', function(){
-      var volume = TC.reverseCompositeVolume(Math.round($('#audioPlayer').prop('volume') * 100));
-      
+      const volume = TC.reverseCompositeVolume(Math.round($('#audioPlayer').prop('volume') * 100));
+
       if (!TC.fading && TC.playerIndex >= 0) {
         TC.stored.list[TC.stored.selectedPlayList].list[TC.playerIndex]['volume'] = volume;
-        var volSlider = $('#volume' + (TC.playerIndex + 1));
+        const volSlider = $('#volume' + (TC.playerIndex + 1));
         if (volSlider.length) {
           volSlider.val(volume);
           volSlider.siblings('.volume-display').text(volume);
@@ -1516,53 +1465,48 @@ var TC = new function () {
     });
     
     TC.serverAvailable = false;
-    
-    //Check server availability and LAN status
+
+    //Check server availability and LAN status, then load data
     $.ajax({ url: 'php/tc.php?action=lan', timeout: 3000 })
-      .done(function (result) {
+      .then(function (result) {
         TC.serverAvailable = true;
-        
         if (result !== 'lan') {
           TC.system = false;
           TC.systemPreview = false;
           TC.lan = false;
         }
-        
-        //Always load from server first
-        $.ajax({ url: 'php/tc.php?action=load', timeout: 5000 })
-          .done(function (data) {
-            if (data) {
-              try {
-                TC.stored = JSON.parse(data);
-                if (!Array.isArray(TC.stored.list)) {
-                  TC.stored.list = [];
-                }
-                localStorage.setItem('tcPersistent', JSON.stringify(TC.stored));
-                if (TC.stored.system !== undefined) {
-                  TC.system = TC.stored.system && TC.lan;
-                }
-                if (TC.stored.systemPreview !== undefined) {
-                  TC.systemPreview = TC.stored.systemPreview && TC.lan;
-                }
-              } catch (err) {
-                console.error('Failed to parse server data:', err);
-                TC.loadAll();
-              }
-            } else {
-              TC.loadAll();
-            }
-            TC.init2();
-          })
-          .fail(function () {
-            console.log('Server load failed, using local storage');
-            TC.loadAll();
-            TC.init2();
-          });
+        return $.ajax({ url: 'php/tc.php?action=load', timeout: 5000, dataType: 'json' });
       })
-      .fail(function () {
-        console.log('Server not available, using local storage only');
+      .then(function (data) {
+        if (data) {
+          try {
+            TC.stored = (typeof data === 'string') ? JSON.parse(data) : data;
+            if (!Array.isArray(TC.stored.list)) {
+              TC.stored.list = [];
+            }
+            localStorage.setItem('tcPersistent', JSON.stringify(TC.stored));
+            if (TC.stored.system !== undefined) {
+              TC.system = TC.stored.system && TC.lan;
+            }
+            if (TC.stored.systemPreview !== undefined) {
+              TC.systemPreview = TC.stored.systemPreview && TC.lan;
+            }
+          } catch (err) {
+            console.error('Failed to parse server data:', err);
+            TC.loadAll();
+          }
+        } else {
+          TC.loadAll();
+        }
+      })
+      .catch(function () {
+        console.log('Server not available or load failed, using local storage');
         TC.loadAll();
+      })
+      .always(function () {
         TC.init2();
       });
-  }  
-}(TC || {});
+  }
+
+  return TC;
+})();
