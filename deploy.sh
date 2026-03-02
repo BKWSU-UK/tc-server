@@ -84,6 +84,12 @@ if [ ! -L /etc/nginx/sites-enabled/trafficcontrol ]; then
     sudo ln -s /etc/nginx/sites-available/trafficcontrol /etc/nginx/sites-enabled/
 fi
 
+# Disable the default nginx site so trafficcontrol becomes the default server
+if [ -L /etc/nginx/sites-enabled/default ]; then
+    echo "Disabling default nginx site..."
+    sudo rm /etc/nginx/sites-enabled/default
+fi
+
 echo "Testing nginx configuration..."
 sudo nginx -t
 
