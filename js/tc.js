@@ -15,7 +15,7 @@ const TC = (() => {
   TC.holdOff = 1000;
   TC.heldOffVolume = -1;
   TC.fading = false;
-  TC.fadeTime = 3000;
+  TC.fadeTime = 5000;
   TC.lastMinute = -1;
   TC.lastHour = -1;
   TC.nextEventReIndex = false;
@@ -102,6 +102,8 @@ const TC = (() => {
       html += '<i class="bi bi-copy" data-bs-toggle="modal" data-bs-target="#editPlaylistName" onclick="TC.playListCopy();" title="Copy"></i>';
       html += '<i class="bi bi-pencil-square" data-bs-toggle="modal" data-bs-target="#editPlaylistName" onclick="TC.playListEdit();" title="Rename"></i>';
       html += '<i class="bi bi-trash text-danger" data-bs-toggle="modal" data-bs-target="#confirmDeletePlaylist" onclick="TC.playListDelete();" title="Delete"></i>';
+      html += '<i class="bi bi-download text-secondary" onclick="TC.exportPlaylists();" title="Export playlists"></i>';
+      html += '<i class="bi bi-upload text-secondary" onclick="TC.importPlaylists();" title="Import playlists"></i>';
       html += '</td></tr><tr><td colspan="2" class="pt-2">';
       html += '<select id="playListSelect" name="playList" class="form-select form-select-sm">';
       for (let i = 0; i < TC.stored.list.length; i++) {
@@ -430,7 +432,76 @@ const TC = (() => {
   TC.playListEdit = function () {
     TC.renderAll();
   };
-    
+  //Export all playlists as a JSON file download
+  TC.exportPlaylists = function () {
+    const date = new Date().toISOString().slice(0, 10);
+    const filename = 'trafficcontrol-' + date + '.json';
+    const json = JSON.stringify(TC.stored, null, 2);
+    const blob = new Blob([json], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+  };
+
+  //Import playlists from a JSON file (replaces all current data)
+  TC.importPlaylists = function () {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.style.display = 'none';
+    input.onchange = function () {
+      TC.handleImportFile(input);
+      document.body.removeChild(input);
+    };
+    document.body.appendChild(input);
+    input.click();
+  };
+  TC.handleImportFile = function (input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      let data;
+      try {
+        data = JSON.parse(e.target.result);
+      } catch (err) {
+        alert('Invalid JSON file.');
+        return;
+      }
+      if (!data || !Array.isArray(data.list)) {
+        alert('Invalid playlist file: missing playlist data.');
+        return;
+      }
+      for (let i = 0; i < data.list.length; i++) {
+        const pl = data.list[i];
+        if (!pl || !Array.isArray(pl.list)) {
+          alert('Invalid playlist file: playlist ' + (i + 1) + ' is malformed.');
+          return;
+        }
+        for (let j = 0; j < pl.list.length; j++) {
+          if (!pl.list[j] || typeof pl.list[j].what !== 'string') {
+            alert('Invalid playlist file: item ' + (j + 1) + ' in playlist "' + (pl.name || (i + 1)) + '" is missing required fields.');
+            return;
+          }
+        }
+      }
+      if (!confirm('This will replace all current playlists with the imported data. Continue?')) return;
+      TC.stored = data;
+      if (typeof TC.stored.selectedPlayList !== 'number' ||
+          TC.stored.selectedPlayList < 0 ||
+          TC.stored.selectedPlayList >= TC.stored.list.length) {
+        TC.stored.selectedPlayList = TC.stored.list.length > 0 ? 0 : -1;
+      }
+      TC.renderAll();
+    };
+    reader.readAsText(file);
+  };
+
   //Validate and correct/default the form
   TC.validate = function () {
     let i, listItem, ip1, changed = false, len;
@@ -1028,9 +1099,9 @@ const TC = (() => {
       if (val < 1) val = 12;
       $field.val(val);
     } else {
-      val += delta * 5;
+      val += delta;
       if (val >= 60) val = 0;
-      if (val < 0) val = 55;
+      if (val < 0) val = 59;
       $field.val(String(val).padStart(2, '0'));
     }
   };

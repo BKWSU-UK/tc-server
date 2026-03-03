@@ -10,7 +10,7 @@
   define ( 'DEBUGLOG', SYSTEMDIR . '/' . 'debug.log');
   define ( 'DEBUG', file_exists ( SYSTEMDIR . '/' . 'debug' ));
   define ( 'LOCKTIMEOUT', 40);
-  define ( 'FADETIMEMS', 3000);
+  define ( 'FADETIMEMS', 5000);
   define ( 'CHIME_START', '.system/Chime_start.flac');
   define ( 'CHIME_END', '.system/Chime_end.flac');
   define ( 'DB_PER_VOL_UNIT', 0.46 );
@@ -413,6 +413,12 @@ function calculateBankHolidays($yr) {
       }
     }
 
+    // PULSE_SERVER env var is set by the Home Assistant supervisor for add-ons
+    // with audio: true, and may also be set in other containerised environments.
+    if (!$hasPulse && getenv('PULSE_SERVER')) {
+      $hasPulse = true;
+    }
+
     if ($hasPulse) {
       return '-ao pulse';
     }
@@ -492,7 +498,8 @@ function calculateBankHolidays($yr) {
     //Default initial value
     $initialLevel = 0;
     prepareMixer ($oldId, $devCardInfo, $controlId, $initialLevel, $isMapped);
-    if (strlen($controlId) > 1) {
+    $hasMixerControl = strlen($controlId) > 1;
+    if ($hasMixerControl) {
       $escapedControlId = escapeshellarg($controlId);
       if ($isMapped) {
         $command = 'amixer ' . $devCardInfo . ' -M set ' . $escapedControlId . ' -- ' . voltoDb($combinedVolume) . 'dB >/dev/null 2>&1';
@@ -501,52 +508,86 @@ function calculateBankHolidays($yr) {
       }
       debugLog($command);
       exec ($command);
-      //Program music playing time and fade if set
-      if ($setLength) {
-        if (property_exists($item, 'howLong') && (intval($item->howLong) > 0)) {
-          $howLong = intval($item->howLong);
-          $fadeTimeMs = intval(FADETIMEMS);
-          $dbPerVolUnit = floatval(DB_PER_VOL_UNIT);
-          $debugLog = escapeshellarg(DEBUGLOG);
-          $initialLevelEscaped = escapeshellarg($initialLevel);
-          $initialLevelDb = voltoDb($initialLevel);
+    }
+    //Program music playing time and fade if set — runs regardless of mixer availability
+    if ($setLength) {
+      if (property_exists($item, 'howLong') && (intval($item->howLong) > 0)) {
+        $howLong = intval($item->howLong);
+        $fadeTimeMs = intval(FADETIMEMS);
+        $dbPerVolUnit = floatval(DB_PER_VOL_UNIT);
+        $debugLog = escapeshellarg(DEBUGLOG);
+        $initialLevelEscaped = escapeshellarg($initialLevel);
+        $initialLevelDb = voltoDb($initialLevel);
 
-          $command = "(  sleep $howLong\n";
-          if ($chime) {
-            $chimeEnd = escapeshellarg(PLAYLISTDIR . '/' . CHIME_END);
-            $command .= "mplayer $chimeEnd $audioOutput -vo null";
-          } else {
-            //dash/bash script to wait for end to music then start fade then kill the music
-            //Do not act if different id playing at time of end of song
-            $fadeStartVol = (($isMapped)?$combinedVolume:$combinedLogVolume);
-            $fadeStepMs = intval($fadeTimeMs / max(1, $fadeStartVol));
+        $command = "(  sleep $howLong\n";
+        if ($chime) {
+          $chimeEnd = escapeshellarg(PLAYLISTDIR . '/' . CHIME_END);
+          $command .= "mplayer $chimeEnd $audioOutput -vo null";
+        } elseif ($hasMixerControl) {
+          //dash/bash script to wait for end to music then start fade then kill the music
+          //Do not act if different id playing at time of end of song
+          $escapedControlId = escapeshellarg($controlId);
+          $fadeStartVol = (($isMapped)?$combinedVolume:$combinedLogVolume);
+          $fadeStepMs = intval($fadeTimeMs / max(1, $fadeStartVol));
 
-            $command .= '  id=' . escapeshellarg($id) . '
-                          if ps aux | grep -v grep | grep -F -q -- "-x $id" ; then
-                            time=$( date +%s%3N )
-                            i=' . $fadeStartVol . '
-                            ' . ((DEBUG)?'echo "Starting fade from volume level $i" >> ' . $debugLog:'') . '
-                            while [ $i -ge 0 ]; do
-                              time=$(( time + ' . $fadeStepMs . ' ))
-                              while [ $time -ge $( date +%s%3N ) ]; do
-                                sleep 0.001
-                              done
-                              amixer ' . $devCardInfo . (($isMapped)?' -M set ' . $escapedControlId . ' -- $( echo "0 - ((99 - $i) * ' . $dbPerVolUnit . ')" | bc )dB':' cset ' . $escapedControlId . ' "$i"%') . '
-                              i=$((i-1))
+          $command .= '  id=' . escapeshellarg($id) . '
+                        if ps aux | grep -v grep | grep -F -q -- "-x $id" ; then
+                          time=$( date +%s%3N )
+                          i=' . $fadeStartVol . '
+                          ' . ((DEBUG)?'echo "Starting fade from volume level $i" >> ' . $debugLog:'') . '
+                          while [ $i -ge 0 ]; do
+                            time=$(( time + ' . $fadeStepMs . ' ))
+                            while [ $time -ge $( date +%s%3N ) ]; do
+                              sleep 0.001
                             done
-                            ' . ((DEBUG)?'echo "Killing player with id : $id" >> ' . $debugLog:'') . '
-                            ps aux | grep -v grep | grep -F -q -- "-x $id" && kill $( ps aux | grep -v grep | grep -F -- "-x $id" | awk \'{print $2}\' )
-                            sleep 0.5
-                            amixer ' . $devCardInfo . (($isMapped)?' -M set ' . $escapedControlId . ' -- ' . $initialLevelDb . 'dB':' cset ' . $escapedControlId . ' ' . $initialLevelEscaped) . '
-                          fi';
+                            amixer ' . $devCardInfo . (($isMapped)?' -M set ' . $escapedControlId . ' -- $( echo "0 - ((99 - $i) * ' . $dbPerVolUnit . ')" | bc )dB':' cset ' . $escapedControlId . ' "$i"%') . '
+                            i=$((i-1))
+                          done
+                          ' . ((DEBUG)?'echo "Killing player with id : $id" >> ' . $debugLog:'') . '
+                          ps aux | grep -v grep | grep -F -q -- "-x $id" && kill $( ps aux | grep -v grep | grep -F -- "-x $id" | awk \'{print $2}\' )
+                          sleep 0.5
+                          amixer ' . $devCardInfo . (($isMapped)?' -M set ' . $escapedControlId . ' -- ' . $initialLevelDb . 'dB':' cset ' . $escapedControlId . ' ' . $initialLevelEscaped) . '
+                        fi';
+        } else {
+          // No ALSA mixer — fade via PulseAudio (pactl), then kill
+          $command .= "  xid=" . escapeshellarg($id) . "\n" .
+            "  MPLAYER_PID=\$(ps aux | grep -v grep | grep -F -- \"-x \$xid\" | awk '{print \$2}' | head -1)\n" .
+            (DEBUG ? "  echo \"PulseAudio fade: xid=\$xid pid=\$MPLAYER_PID\" >> $debugLog\n" : '') .
+            "  if [ -n \"\$MPLAYER_PID\" ]; then\n" .
+            "    SINK=\$(pactl list sink-inputs 2>/dev/null | awk -v mpid=\"\$MPLAYER_PID\" '/^Sink Input/{si=substr(\$3,2)} /application\\.process\\.id/ && index(\$0,mpid){print si}')\n" .
+            "    if [ -n \"\$SINK\" ]; then\n" .
+            "      CURRENT_VOL=\$(pactl list sink-inputs 2>/dev/null | awk -v sink=\"\$SINK\" '/^Sink Input #/{found=(substr(\$3,2)==sink)} found && /Volume:/{match(\$0,/[0-9]+%/); print substr(\$0,RSTART,RLENGTH-1)+0; exit}')\n" .
+            "      [ -z \"\$CURRENT_VOL\" ] && CURRENT_VOL=100\n" .
+            "      i=\$(( CURRENT_VOL * 50 / 100 ))\n" .
+            "      while [ \$i -ge 0 ]; do\n" .
+            "        pactl set-sink-input-volume \"\$SINK\" \"\$(( \$i * 100 / 50 ))%\" 2>/dev/null\n" .
+            "        sleep 0.1\n" .
+            "        i=\$(( \$i - 1 ))\n" .
+            "      done\n" .
+            "    fi\n" .
+            "    kill \"\$MPLAYER_PID\" 2>/dev/null\n" .
+            "  fi";
+        }
+        $command .= "\n) >/dev/null 2>&1 &";
+        debugLog($command);
+        exec ($command);
+      }
+    }
+    // Real-time PulseAudio volume when no ALSA mixer is available (used by setVolume action)
+    if (!$hasMixerControl && !$setLength && strlen($oldId) > 1) {
+      $xid = explode('-', $oldId)[1] ?? '';
+      if (ctype_digit($xid)) {
+        $mplayerPid = trim(exec("ps aux | grep -v grep | grep -F -- '-x $xid' | awk '{print \$2}' | head -1 2>/dev/null"));
+        if (ctype_digit($mplayerPid)) {
+          $sinkInput = trim(exec("pactl list sink-inputs 2>/dev/null | awk -v mpid=$mplayerPid '/^Sink Input/{si=substr(\$3,2)} /application\\.process\\.id/ && index(\$0,mpid){print si}'"));
+          if (ctype_digit($sinkInput)) {
+            exec("pactl set-sink-input-volume $sinkInput {$combinedVolume}% 2>/dev/null");
+            debugLog("PulseAudio: set sink-input $sinkInput to {$combinedVolume}%");
           }
-          $command .= "\n) >/dev/null 2>&1 &";
-          debugLog($command);
-          exec ($command);
         }
       }
     }
-    return $initialLevel . '-' . $id;
+    return ['id' => $initialLevel . '-' . $id, 'hasMixerControl' => $hasMixerControl, 'volume' => $combinedVolume];
   }
 
   function fileIsAudio ($file) {
@@ -977,13 +1018,16 @@ function calculateBankHolidays($yr) {
     }
     $audioOutput = getMplayerAudioOutput();
     $chime = str_ends_with($entry->whatSelectedRemote, CHIME_START);
-    $id = setPlayerVolumeAndLength($index, true, $id, $oldId, $chime, $audioOutput, '');
+    $result = setPlayerVolumeAndLength($index, true, $id, $oldId, $chime, $audioOutput, '');
+    $id = $result['id'];
     //mplayer plays just about anything and is available on Rapberry Pi
     $mplayerPath = escapeshellarg(PLAYLISTDIR . '/' . $entry->whatSelectedRemote);
     $sid = escapeshellarg(explode("-", "$id")[0]);
     $xid = escapeshellarg(explode("-", "$id")[1]);
+    // When no ALSA mixer control is available (e.g. PulseAudio), pass volume directly to mplayer
+    $volumeFlag = $result['hasMixerControl'] ? '' : '-volume ' . $result['volume'];
     // Use nohup and setsid to fully detach from parent process
-    $mplayerCmd = "nohup setsid mplayer $mplayerPath $audioOutput -vo null -sid $sid -x $xid >/dev/null 2>&1 </dev/null &";
+    $mplayerCmd = "nohup setsid mplayer $mplayerPath $audioOutput $volumeFlag -vo null -sid $sid -x $xid >/dev/null 2>&1 </dev/null &";
     exec($mplayerCmd);
     debugLog($mplayerCmd);
     $played = $entry->whatSelectedRemote;

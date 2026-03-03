@@ -20,6 +20,11 @@ if [ ! -f /media/trafficcontrol/.system/Chime_start.flac ]; then
     cp /app-defaults/.system/* /media/trafficcontrol/.system/
 fi
 
+# Copy default playlist on first run
+if [ ! -f /data/playListDb.JSON ]; then
+    cp /app-defaults/playListDbDefault.JSON /data/playListDb.JSON
+fi
+
 # Replace Music dir with symlink to media
 if [ -d "$APP_DIR/Music" ] && [ ! -L "$APP_DIR/Music" ]; then
     rm -rf "$APP_DIR/Music"

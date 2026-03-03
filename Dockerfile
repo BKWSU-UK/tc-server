@@ -9,6 +9,7 @@ RUN apt-get update && \
         php-cli \
         mplayer \
         alsa-utils \
+        pulseaudio-utils \
         bc \
         cron \
     && rm -rf /var/lib/apt/lists/*
@@ -27,10 +28,13 @@ COPY img/ /var/www/html/trafficcontrol/img/
 COPY php/ /var/www/html/trafficcontrol/php/
 COPY elFinder-2.1.65/ /var/www/html/trafficcontrol/elFinder-2.1.65/
 COPY jquery-ui-1.13.3/ /var/www/html/trafficcontrol/jquery-ui-1.13.3/
-COPY index.html more.html find.html info.php /var/www/html/trafficcontrol/
+COPY index.html more.html /var/www/html/trafficcontrol/
 
 # Bundle chime files; they are copied to /media on first run
 COPY Music/.system/ /app-defaults/.system/
+
+# Bundle default playlist; copied to /data on first run
+COPY .tcsys/playListDbDefault.JSON /app-defaults/playListDbDefault.JSON
 
 # Copy startup script
 COPY run.sh /
