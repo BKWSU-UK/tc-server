@@ -497,6 +497,8 @@ const TC = (() => {
           TC.stored.selectedPlayList >= TC.stored.list.length) {
         TC.stored.selectedPlayList = TC.stored.list.length > 0 ? 0 : -1;
       }
+      delete TC.stored.nextEventTime;
+      delete TC.stored.nextEventIndex;
       TC.renderAll();
     };
     reader.readAsText(file);
