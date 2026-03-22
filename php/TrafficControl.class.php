@@ -93,7 +93,7 @@ class TrafficControl {
 
     public function findNext(): void {
         $timeNow = time();
-        $weekNumber = intval(date('j', $timeNow) / 7) + 1;
+        $weekNumber = intval((date('j', $timeNow) - 1) / 7) + 1;
         $weekDay = strtolower(date('l', $timeNow));
         $hour = intval(date('G', $timeNow));
         $minute = intval(date('i', $timeNow));
@@ -109,11 +109,14 @@ class TrafficControl {
                 $dayMatch = (($listItem->week === 'all' || (intval($listItem->week) === $weekNumber)) &&
                             (($listItem->day === 'day') || ($listItem->day === $weekDay)));
 
-                if (($listItem->exception === 'every') !== $dayMatch) {
+                if (!$dayMatch) {
                     continue;
                 }
 
                 $timeBits = explode(':', str_replace(' ', '', $listItem->time));
+                if (count($timeBits) < 3) {
+                    continue;
+                }
                 $h = intval($timeBits[0]);
                 if ($h === 12) {
                     $h = ($timeBits[2] === 'PM') ? 12 : 0;

@@ -332,14 +332,10 @@ const TC = (() => {
           listItem = TC.stored.list[TC.stored.selectedPlayList].list[i];
           if (listItem && !listItem.hasOwnProperty('what')) {
             doneStuff = true;
-            if (i === len) {
-              TC.stored.list[TC.stored.selectedPlayList].list.pop();
+            if (i === 0) {
+              TC.stored.list[TC.stored.selectedPlayList].list.shift();
             } else {
-              if (i === 0) {
-                TC.stored.list[TC.stored.selectedPlayList].list.shift();
-              } else {
-                TC.stored.list[TC.stored.selectedPlayList].list.splice(i, 1);
-              }
+              TC.stored.list[TC.stored.selectedPlayList].list.splice(i, 1);
             }
           }
         }
@@ -633,7 +629,8 @@ const TC = (() => {
             while (dirPlayed.recentLocal.length > ( keys.length / 2 )) {
               dirPlayed.recentLocal.pop();
             }
-            //Look for match
+            //Look for match, cap attempts to prevent infinite loop
+            let attempts = 0;
             do {
               found = false;
               for (i = 0; i < dirPlayed.recentLocal.length; i++) {
@@ -643,7 +640,8 @@ const TC = (() => {
                   break;
                 }
               }
-           } while (found);
+              attempts++;
+           } while (found && attempts < keys.length * 2);
           }
           //Selected entry
           entry.hashSelectedLocal = dirList[keys[pick]].hash;
@@ -1299,7 +1297,7 @@ const TC = (() => {
   
   TC.nextEvent = function (d) {
     let bestTime = -1, len, listItem, i, timeBits, dayMatch;
-    const weekNumber = parseInt(d.getDate() / 7) + 1;
+    const weekNumber = parseInt((d.getDate() - 1) / 7) + 1;
     const day = d.getDay();
     const hour = d.getHours();
     const minute = d.getMinutes();
@@ -1327,7 +1325,7 @@ const TC = (() => {
                   ((listItem.day === 'day') || (listItem.day === weekDay[day])));
         
         //Skip if wrong day
-        if ((listItem.exception === 'every') !== dayMatch) {
+        if (!dayMatch) {
           continue;
         }
           
@@ -1507,7 +1505,7 @@ const TC = (() => {
     
     //Bind to audio player events
     $('#audioPlayerDiv').hide();
-    $('#audioPlayer').bind('pause ended', function(){
+    $('#audioPlayer').on('pause ended', function(){
       //Clear the player 10 seconds from now
       if (TC.hidePlayerTimeout) {
         clearTimeout(TC.hidePlayerTimeout);
@@ -1516,12 +1514,12 @@ const TC = (() => {
         $('#audioPlayerDiv').fadeOut(200);
       }, 3000);
     });
-    $('#audioPlayer').bind('play', function(){
+    $('#audioPlayer').on('play', function(){
       if (TC.hidePlayerTimeout) {
         clearTimeout(TC.hidePlayerTimeout);
       }      
     });
-    $('#audioPlayer').bind('volumechange', function(){
+    $('#audioPlayer').on('volumechange', function(){
       const volume = TC.reverseCompositeVolume(Math.round($('#audioPlayer').prop('volume') * 100));
 
       if (!TC.fading && TC.playerIndex >= 0) {

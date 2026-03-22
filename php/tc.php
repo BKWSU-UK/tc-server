@@ -121,7 +121,7 @@
             }
             checkOsCommands ();
             if (isset($_REQUEST['index'])) {
-              $index = $_REQUEST['index'];
+              $index = (int)$_REQUEST['index'];
               $tc->getLock('play');
               $tc->loadStored();
               playEntry ($index);
@@ -260,16 +260,6 @@
             if (file_exists(DEBUGLOG)) unlink(DEBUGLOG);
             $tc->releaseLock('factoryreset');
             die('Factory reset done');
-            break;
-          case 'update':
-            if (!clientInSameSubnet() || !sys_writable()) {
-              die('Software update denied');
-            }
-            checkOsCommands ();
-            $rootDir = escapeshellarg(ROOTDIR);
-            $debugLog = escapeshellarg(DEBUGLOG);
-            shell_exec("(cd $rootDir && pwd && svn up) > $debugLog 2>&1 &");
-            die('<p>Update requested. Result can be viewed <a href="../.tcsys/debug.log">here</a></p>');
             break;
         }
     } catch (Exception $e) {

@@ -15,23 +15,26 @@
   define ( 'CHIME_END', '.system/Chime_end.flac');
   define ( 'DB_PER_VOL_UNIT', 0.46 );
   define ( 'OS_COMMANDS', 'bc|amixer|mplayer');
-  define ( 'CARD_NUM', (function() {
-    $aplayOutput = [];
-    exec('aplay -l 2>/dev/null', $aplayOutput);
-    foreach ($aplayOutput as $line) {
-        if (preg_match('/^card (\d+):.*device 0:/', $line, $matches)) {
-            $cardNum = intval($matches[1]);
-            if (strpos($line, 'HDMI') === false) {
-                return $cardNum;
-            }
-        }
-    }
-    return -1;
-  })());
 
   //This may be changed by some functions but must be set now
   //to prevent warnings
   date_default_timezone_set ( "Europe/London" );
+
+  function getCardNum(): int {
+    static $cardNum = null;
+    if ($cardNum !== null) return $cardNum;
+    $aplayOutput = [];
+    exec('aplay -l 2>/dev/null', $aplayOutput);
+    foreach ($aplayOutput as $line) {
+      if (preg_match('/^card (\d+):.*device 0:/', $line, $matches)) {
+        $n = intval($matches[1]);
+        if (strpos($line, 'HDMI') === false) {
+          return $cardNum = $n;
+        }
+      }
+    }
+    return $cardNum = -1;
+  }
 
   function sys_writable () {
     return is_writable(SYSTEMDIR);
@@ -369,13 +372,14 @@ function calculateBankHolidays($yr) {
     }
 
     // Auto-detect: prefer non-HDMI ALSA card, fallback to bluetooth
-    if (CARD_NUM != -1) {
+    $cardNum = getCardNum();
+    if ($cardNum != -1) {
       $cards = @file_get_contents('/proc/asound/cards');
-      if ($cards !== false && preg_match('/^\s*' . CARD_NUM . '\s+\[([^\]]+)\]/m', $cards, $matches)) {
+      if ($cards !== false && preg_match('/^\s*' . $cardNum . '\s+\[([^\]]+)\]/m', $cards, $matches)) {
         $cardId = preg_replace('/[^A-Za-z0-9_]/', '', trim($matches[1]));
-        $devCardInfo = ($cardId !== '') ? "-c " . $cardId : "-c " . CARD_NUM;
+        $devCardInfo = ($cardId !== '') ? "-c " . $cardId : "-c " . $cardNum;
       } else {
-        $devCardInfo = "-c " . CARD_NUM;
+        $devCardInfo = "-c " . $cardNum;
       }
     } else {
       $devCardInfo = (exec( 'which bluealsa-aplay >/dev/null && bluealsa-aplay -L | grep -Fo headset' ) === 'headset')?' -D bluealsa':'';
@@ -430,13 +434,14 @@ function calculateBankHolidays($yr) {
     }
 
     // Auto-detect ALSA card
-    if (CARD_NUM >= 0) {
+    $cardNum = getCardNum();
+    if ($cardNum >= 0) {
       $cards = @file_get_contents('/proc/asound/cards');
-      if ($cards !== false && preg_match('/^\s*' . CARD_NUM . '\s+\[([^\]]+)\]/m', $cards, $matches)) {
+      if ($cards !== false && preg_match('/^\s*' . $cardNum . '\s+\[([^\]]+)\]/m', $cards, $matches)) {
         $cardId = trim($matches[1]);
         return '-ao alsa:device=plughw=' . $cardId . '.0';
       }
-      return '-ao alsa:device=plughw=' . CARD_NUM . '.0';
+      return '-ao alsa:device=plughw=' . $cardNum . '.0';
     }
 
     // Last resort - let mplayer auto-detect

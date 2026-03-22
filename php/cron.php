@@ -29,13 +29,15 @@
 
     if (property_exists($stored, 'nextEventTime') && ($stored->system === true)) {
       if (DEBUG) {
-          $logEntry = "Comparing time " . date('G:i') . " with " . date('G:i', $stored->nextEventTime) . "\n";
+          $logEntry = "Comparing time " . time() . " with event time " . $stored->nextEventTime . " (diff " . abs(time() - $stored->nextEventTime) . "s)\n";
           $tc->debugLog($logEntry);
       }
-      if (date('G:i') === date('G:i', $stored->nextEventTime)) {
+      if (abs(time() - $stored->nextEventTime) < 30) {
         $played = playEntry($stored->nextEventIndex);
         $logEntry = "Played \"" . $played . "\" for index " . $stored->nextEventIndex . " at " . date('r');
-        exec('if [ $( wc -l ' . escapeshellarg(DEBUGLOG) . ' | awk \'{print $1}\' ) -gt 1100 ]; then tail -n 1000 ' . escapeshellarg(DEBUGLOG) . ' >' . escapeshellarg(DEBUGLOG . '_temp') . '; mv -f ' . escapeshellarg(DEBUGLOG . '_temp') . ' ' . escapeshellarg(DEBUGLOG) . '; fi');
+        if (DEBUG && file_exists(DEBUGLOG) && filesize(DEBUGLOG) > 0) {
+            exec('if [ $( wc -l ' . escapeshellarg(DEBUGLOG) . ' | awk \'{print $1}\' ) -gt 1100 ]; then tail -n 1000 ' . escapeshellarg(DEBUGLOG) . ' >' . escapeshellarg(DEBUGLOG . '_temp') . '; mv -f ' . escapeshellarg(DEBUGLOG . '_temp') . ' ' . escapeshellarg(DEBUGLOG) . '; fi');
+        }
         next_and_store();
         $logEntry .= ", next due : " . date('G:i', $stored->nextEventTime) . "\n";
         $tc->debugLog($logEntry);
