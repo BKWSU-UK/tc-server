@@ -77,9 +77,9 @@
               $tc->findNext();
               $tc->saveStored();
 
-              // Update cron job based on system flag
               $systemEnabled = property_exists($newStore, 'system') && $newStore->system === true;
-              updateCronJob($systemEnabled);
+              $schedulerEnabled = !property_exists($newStore, 'schedulerEnabled') || $newStore->schedulerEnabled === true;
+              updateCronJob($systemEnabled && $schedulerEnabled);
             }
             $tc->releaseLock('store');
             break;

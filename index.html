@@ -25,10 +25,10 @@
     
     <!-- Local CSS -->
     <link rel="stylesheet" type="text/css" media="screen" href="css/tc-nojs.css">
-    <link rel="stylesheet" type="text/css" media="screen" href="css/tc.css?v=20260130c">
+    <link rel="stylesheet" type="text/css" media="screen" href="css/tc.css?v=20260323a">
     
     <!-- Local JS -->
-    <script src="js/tc.js?v=20260130c"></script>
+    <script src="js/tc.js?v=20260323a"></script>
     
     <script>
       $().ready(function() {
@@ -78,6 +78,17 @@
                   <i class="bi bi-gear-fill me-2 text-primary"></i>Settings
                 </h5>
                 <div class="d-grid gap-3">
+                  <div class="toggle-container scheduler-container">
+                    <span class="small fw-bold text-muted">Traffic Control</span>
+                    <div class="d-flex align-items-center">
+                      <span class="toggle-label me-2">Off</span>
+                      <label class="toggle-switch">
+                        <input id="schedulerToggleButton" type="checkbox">
+                        <span class="toggle-slider"></span>
+                      </label>
+                      <span class="toggle-label ms-2">On</span>
+                    </div>
+                  </div>
                   <div class="toggle-container mode-container">
                     <span class="small fw-bold text-muted">System Mode</span>
                     <div class="d-flex align-items-center">

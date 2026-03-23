@@ -1,6 +1,6 @@
 name: "Traffic Control"
 description: "Audio scheduling and playback system for timed announcements and music"
-version: "1.1.9"
+version: "1.2.0"
 slug: "trafficcontrol"
 init: false
 

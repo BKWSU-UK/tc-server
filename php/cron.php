@@ -27,7 +27,7 @@
     $tc->getLock('cron');
     $stored = $tc->loadStored(); // Initialize global variable for procedural functions
 
-    if (property_exists($stored, 'nextEventTime') && ($stored->system === true)) {
+    if (property_exists($stored, 'nextEventTime') && ($stored->system === true) && (!property_exists($stored, 'schedulerEnabled') || $stored->schedulerEnabled === true)) {
       if (DEBUG) {
           $logEntry = "Comparing time " . time() . " with event time " . $stored->nextEventTime . " (diff " . abs(time() - $stored->nextEventTime) . "s)\n";
           $tc->debugLog($logEntry);

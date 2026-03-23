@@ -9,6 +9,7 @@ const TC = (() => {
   TC.playerIndex = -1;
   TC.loaded = false;
   TC.system = true;
+  TC.schedulerEnabled = true;
   TC.systemPreview = false;
   TC.lan = true;
   TC.serverAvailable = false;
@@ -85,7 +86,9 @@ const TC = (() => {
   //Render the JS generated parts of the page
   TC.renderModeToggles = function () {
     $('#modeToggleButton').prop('checked', TC.system);
+    $('#schedulerToggleButton').prop('checked', TC.schedulerEnabled);
     $('#previewToggleButton').prop('checked', TC.systemPreview);
+    $('.scheduler-container').css('visibility', TC.system && TC.lan ? 'visible' : 'hidden');
     $('.preview-mode-container').css('visibility', TC.system ? 'visible' : 'hidden');
     $('.mode-container').css('visibility', TC.lan ? 'visible' : 'hidden');
     $('.audio-device-container').css('display', TC.lan ? 'block' : 'none');
@@ -268,6 +271,7 @@ const TC = (() => {
     if (!TC.controlsHoldOff) {
       TC.nextEventReIndex = true;
       TC.stored.system = TC.system;
+      TC.stored.schedulerEnabled = TC.schedulerEnabled;
       TC.stored.systemPreview = TC.systemPreview;
       
       //Store to local storage as backup
@@ -313,6 +317,9 @@ const TC = (() => {
       if (TC.lan) {
         if (TC.stored.system) {
           TC.system = TC.stored.system;
+        }
+        if (TC.stored.schedulerEnabled !== undefined) {
+          TC.schedulerEnabled = TC.stored.schedulerEnabled;
         }
         if (TC.stored.systemPreview) {
           TC.systemPreview = TC.stored.systemPreview;
@@ -1009,6 +1016,13 @@ const TC = (() => {
             TC.renderAll();
           }
           break;
+        case 'schedulerToggleButton':
+          if (TC.schedulerEnabled !== $('#schedulerToggleButton').prop('checked')) {
+            TC.schedulerEnabled = $('#schedulerToggleButton').prop('checked');
+            TC.forceRemoteSave = true;
+            TC.renderAll();
+          }
+          break;
         case 'previewToggleButton':
           if (TC.systemPreview !== $('#previewToggleButton').prop('checked')) {
             TC.systemPreview = $('#previewToggleButton').prop('checked');
@@ -1558,6 +1572,9 @@ const TC = (() => {
             localStorage.setItem('tcPersistent', JSON.stringify(TC.stored));
             if (TC.stored.system !== undefined) {
               TC.system = TC.stored.system && TC.lan;
+            }
+            if (TC.stored.schedulerEnabled !== undefined) {
+              TC.schedulerEnabled = TC.stored.schedulerEnabled && TC.lan;
             }
             if (TC.stored.systemPreview !== undefined) {
               TC.systemPreview = TC.stored.systemPreview && TC.lan;
