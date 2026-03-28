@@ -106,8 +106,12 @@ class TrafficControl {
                     continue;
                 }
 
-                $dayMatch = (($listItem->week === 'all' || (intval($listItem->week) === $weekNumber)) &&
-                            (($listItem->day === 'day') || ($listItem->day === $weekDay)));
+                $weekMatch = ($listItem->week === 'all' || (intval($listItem->week) === $weekNumber));
+                if ($listItem->exception === 'except') {
+                    $dayMatch = $weekMatch && ($listItem->day !== $weekDay);
+                } else {
+                    $dayMatch = $weekMatch && (($listItem->day === 'day') || ($listItem->day === $weekDay));
+                }
 
                 if (!$dayMatch) {
                     continue;

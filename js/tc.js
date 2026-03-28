@@ -1335,8 +1335,12 @@ const TC = (() => {
           continue;
         }
 
-        dayMatch = ((listItem.week === 'all' || (parseInt(listItem.week) === weekNumber)) && 
-                  ((listItem.day === 'day') || (listItem.day === weekDay[day])));
+        const weekMatch = (listItem.week === 'all' || (parseInt(listItem.week) === weekNumber));
+        if (listItem.exception === 'except') {
+          dayMatch = weekMatch && (listItem.day !== weekDay[day]);
+        } else {
+          dayMatch = weekMatch && ((listItem.day === 'day') || (listItem.day === weekDay[day]));
+        }
         
         //Skip if wrong day
         if (!dayMatch) {
