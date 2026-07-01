@@ -8,18 +8,20 @@
   define ( 'PERSISTENTLOCK', SYSTEMDIR . '/' . 'playListDb.lock');
   define ( 'PLAYLOG', SYSTEMDIR . '/' . 'played.log');
   define ( 'DEBUGLOG', SYSTEMDIR . '/' . 'debug.log');
+  define ( 'FADEDEBUGLOG', SYSTEMDIR . '/' . 'debug_fade.log');
   define ( 'DEBUG', file_exists ( SYSTEMDIR . '/' . 'debug' ));
   define ( 'LOCKTIMEOUT', 40);
   define ( 'FADETIMEMS', 5000);
   define ( 'CHIME_START', '.system/Chime_start.flac');
   define ( 'CHIME_END', '.system/Chime_end.flac');
   define ( 'DB_PER_VOL_UNIT', 0.46 );
-  define ( 'OS_COMMANDS', 'bc|amixer|mplayer');
+  define ( 'OS_COMMANDS', 'bc|amixer|mplayer|bash');
+  define ( 'NO_BUSYBOX_COMMAND', 'grep|date|ps');
 
   //This may be changed by some functions but must be set now
   //to prevent warnings
   date_default_timezone_set ( "Europe/London" );
-
+  
   function getCardNum(): int {
     static $cardNum = null;
     if ($cardNum !== null) return $cardNum;
@@ -30,7 +32,7 @@
         $n = intval($matches[1]);
         if (strpos($line, 'HDMI') === false) {
           return $cardNum = $n;
-        }
+    }
       }
     }
     return $cardNum = -1;
@@ -272,7 +274,7 @@ function calculateBankHolidays($yr) {
           ];
         }
       }
-    }
+        }
 
     // Scan Bluetooth devices via bluetoothctl
     $btLines = [];
@@ -291,7 +293,7 @@ function calculateBankHolidays($yr) {
           ];
         }
       }
-    }
+        }
 
     // Check for bluealsa as fallback bluetooth detection
     if (empty(array_filter($devices, fn($d) => $d['type'] === 'bluetooth'))) {
@@ -316,7 +318,7 @@ function calculateBankHolidays($yr) {
     ]);
 
     return $devices;
-  }
+        }
 
   function getSelectedAudioDevice() {
     global $stored;
@@ -329,13 +331,13 @@ function calculateBankHolidays($yr) {
   function resolveAudioDevice($selectedDevice) {
     if ($selectedDevice === 'auto') {
       return 'auto';
-    }
+          }
     $devices = getAudioDevices();
     foreach ($devices as $device) {
       if (isset($device['id']) && $device['id'] === $selectedDevice) {
         return $selectedDevice;
-      }
-    }
+        }
+        }
     // Backward compatibility: map numeric card id to cardId
     if (strpos($selectedDevice, 'alsa:') === 0) {
       $maybeNum = substr($selectedDevice, 5);
@@ -343,7 +345,7 @@ function calculateBankHolidays($yr) {
         foreach ($devices as $device) {
           if (isset($device['cardNum']) && (string)$device['cardNum'] === $maybeNum && isset($device['cardId'])) {
             return 'alsa:' . $device['cardId'];
-          }
+        }
         }
       }
     }
@@ -413,20 +415,20 @@ function calculateBankHolidays($yr) {
           putenv('PULSE_SERVER=unix:' . $socket);
           $hasPulse = true;
           break;
-        }
-      }
     }
+    }
+  }
 
     // PULSE_SERVER env var is set by the Home Assistant supervisor for add-ons
     // with audio: true, and may also be set in other containerised environments.
     if (!$hasPulse && getenv('PULSE_SERVER')) {
       $hasPulse = true;
-    }
+  }
 
     if ($hasPulse) {
       return '-ao pulse';
-    }
-
+  }
+  
     // Fall back to ALSA with plughw (allows software mixing, works alongside PipeWire)
     if ($selectedDevice !== 'auto' && strpos($selectedDevice, 'alsa:') === 0) {
       $cardId = substr($selectedDevice, 5);
@@ -452,9 +454,9 @@ function calculateBankHolidays($yr) {
     $isMapped = (exec('amixer ' . $devCardInfo . ' -M 2>&1 | grep -Fo invalid') !== 'invalid');
     return $isMapped;
   }
-
+  
   function prepareMixer (&$oldId, &$devCardInfo, &$controlId, &$level, &$isMapped) {
-    $devCardInfo = getDevCardInfo();
+    $devCardInfo = getDevCardInfo();    
     $isMapped = getIsMapped();
     if ($isMapped) {
       //Copy initial level from playing instance if available
@@ -497,7 +499,7 @@ function calculateBankHolidays($yr) {
     $combinedLogVolume = 0;
     if ($combinedVolume > 0) {
       //Math.pow(10, (compositeVolume + 1) / 50) - 1
-
+      
       $combinedLogVolume = intval(100 - ((0 - log10($combinedVolume / 100))*50));
     }
     //Default initial value
@@ -512,11 +514,11 @@ function calculateBankHolidays($yr) {
         $command = 'amixer ' . $devCardInfo . ' cset ' . $escapedControlId . ' ' . $combinedLogVolume . '% >/dev/null 2>&1';
       }
       debugLog($command);
-      exec ($command);
+      exec ($command);      
     }
     //Program music playing time and fade if set — runs regardless of mixer availability
-    if ($setLength) {
-      if (property_exists($item, 'howLong') && (intval($item->howLong) > 0)) {
+      if ($setLength) {
+        if (property_exists($item, 'howLong') && (intval($item->howLong) > 0)) {
         $howLong = intval($item->howLong);
         $fadeTimeMs = intval(FADETIMEMS);
         $dbPerVolUnit = floatval(DB_PER_VOL_UNIT);
@@ -525,34 +527,34 @@ function calculateBankHolidays($yr) {
         $initialLevelDb = voltoDb($initialLevel);
 
         $command = "(  sleep $howLong\n";
-        if ($chime) {
+          if ($chime) {
           $chimeEnd = escapeshellarg(PLAYLISTDIR . '/' . CHIME_END);
           $command .= "mplayer $chimeEnd $audioOutput -vo null";
         } elseif ($hasMixerControl) {
-          //dash/bash script to wait for end to music then start fade then kill the music
-          //Do not act if different id playing at time of end of song
+            //dash/bash script to wait for end to music then start fade then kill the music
+            //Do not act if different id playing at time of end of song
           $escapedControlId = escapeshellarg($controlId);
           $fadeStartVol = (($isMapped)?$combinedVolume:$combinedLogVolume);
           $fadeStepMs = intval($fadeTimeMs / max(1, $fadeStartVol));
 
           $command .= '  id=' . escapeshellarg($id) . '
                         if ps aux | grep -v grep | grep -F -q -- "-x $id" ; then
-                          time=$( date +%s%3N )
+                            time=$( date +%s%3N )
                           i=' . $fadeStartVol . '
                           ' . ((DEBUG)?'echo "Starting fade from volume level $i" >> ' . $debugLog:'') . '
-                          while [ $i -ge 0 ]; do
+                            while [ $i -ge 0 ]; do
                             time=$(( time + ' . $fadeStepMs . ' ))
-                            while [ $time -ge $( date +%s%3N ) ]; do
-                              sleep 0.001
-                            done
+                              while [ $time -ge $( date +%s%3N ) ]; do
+                                sleep 0.001
+                              done
                             amixer ' . $devCardInfo . (($isMapped)?' -M set ' . $escapedControlId . ' -- $( echo "0 - ((99 - $i) * ' . $dbPerVolUnit . ')" | bc )dB':' cset ' . $escapedControlId . ' "$i"%') . '
-                            i=$((i-1))
-                          done
+                              i=$((i-1))
+                            done
                           ' . ((DEBUG)?'echo "Killing player with id : $id" >> ' . $debugLog:'') . '
-                          ps aux | grep -v grep | grep -F -q -- "-x $id" && kill $( ps aux | grep -v grep | grep -F -- "-x $id" | awk \'{print $2}\' )
-                          sleep 0.5
+                            ps aux | grep -v grep | grep -F -q -- "-x $id" && kill $( ps aux | grep -v grep | grep -F -- "-x $id" | awk \'{print $2}\' )
+                            sleep 0.5
                           amixer ' . $devCardInfo . (($isMapped)?' -M set ' . $escapedControlId . ' -- ' . $initialLevelDb . 'dB':' cset ' . $escapedControlId . ' ' . $initialLevelEscaped) . '
-                        fi';
+                          fi';
         } else {
           // No ALSA mixer — fade via PulseAudio (pactl), then kill
           $command .= "  xid=" . escapeshellarg($id) . "\n" .
@@ -572,12 +574,12 @@ function calculateBankHolidays($yr) {
             "    fi\n" .
             "    kill \"\$MPLAYER_PID\" 2>/dev/null\n" .
             "  fi";
-        }
+          }
         $command .= "\n) >/dev/null 2>&1 &";
-        debugLog($command);
-        exec ($command);
+          debugLog($command);
+          exec ($command);
+        }
       }
-    }
     // Real-time PulseAudio volume when no ALSA mixer is available (used by setVolume action)
     if (!$hasMixerControl && !$setLength && strlen($oldId) > 1) {
       $xid = explode('-', $oldId)[1] ?? '';
@@ -589,7 +591,7 @@ function calculateBankHolidays($yr) {
             exec("pactl set-sink-input-volume $sinkInput {$combinedVolume}% 2>/dev/null");
             debugLog("PulseAudio: set sink-input $sinkInput to {$combinedVolume}%");
           }
-        }
+    }
       }
     }
     return ['id' => $initialLevel . '-' . $id, 'hasMixerControl' => $hasMixerControl, 'volume' => $combinedVolume];
@@ -1072,16 +1074,30 @@ function calculateBankHolidays($yr) {
       }
     }
     if (strlen($flunked) > 0) {
-      die('Required OS command(s)' . $flunked . ', not found');
+      die('Required OS command(s) :' . $flunked . ', not found');
     }
   }
-
+  function checkBusyBoxCommands () {
+    $flunked = "";
+    $busy_commands = explode('|', NO_BUSYBOX_COMMAND);
+    foreach ($busy_commands as $command) {
+      $which = exec('which ' . $command );
+      if (is_link($which) && (readlink($which) == "/bin/busybox")) {
+        debugLog("Required OS command, $command, is the Busybox version. GNU version of this command required.");
+        $flunked .= ', ' . $command;
+      }
+    }
+    if (strlen($flunked) > 0) {
+      die('Required OS command(s) :' . $flunked . ', are Busybox version. The GNU versions (coreutils, grep, procps) are required.');
+    }
+  }
+  
   function debugLog($message) {
     if (DEBUG) {
       file_put_contents(DEBUGLOG, $message . "\n", FILE_APPEND);
-    }
+    }    
   }
-
+  
   function errorLog(Throwable $e) {
     $logEntry = 'File : ' . $e->getFile() . ', Line : ' . $e->getLine() . ', Message : ' . $e->getMessage() . "\n";
     file_put_contents(DEBUGLOG, $logEntry, FILE_APPEND);

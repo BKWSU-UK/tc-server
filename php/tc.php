@@ -5,7 +5,7 @@
   ini_set('display_startup_errors', 0);
   ini_set('log_errors', 1);
   error_reporting(E_ALL);
-
+  
   define ( 'ELCONNECTOR', 'http://localhost' . dirname(dirname($_SERVER['PHP_SELF'])) . '/elfinder-2.x/php/connector.php');
 
   include('tc.lib.php');
@@ -15,25 +15,25 @@
   if (DEBUG) {
     set_exception_handler('errorLog');
   }
-
+  
   if (isset($_REQUEST['action'])) {
     try {
         $stored = $tc->loadStored(); // Initialize global variable for procedural functions
-        switch ($_REQUEST['action']) {
-          #Store settings sent from client
-          case 'store':
+    switch ($_REQUEST['action']) {
+      #Store settings sent from client
+      case 'store':
             $tc->getLock('store');
-            if (isset($_REQUEST['tcPersistent'])) {
+        if (isset($_REQUEST['tcPersistent'])) {
               $stored = $tc->loadStored();
               $newStore = json_decode(rawurldecode($_REQUEST['tcPersistent']));
 
-              // Preserve item-specific remote items
-              if (property_exists($stored, 'list')) {
-                foreach ($stored->list as $i => $playList) {
-                  if (property_exists($playList, 'lastPlay')) {
-                    foreach ($playList->lastPlay as $j => $lastPlayHash) {
+          //Preserve item-specific remote items
+          if (property_exists($stored, 'list')) {
+            foreach ($stored->list as $i => $playList) {                  
+              if (property_exists($playList, 'lastPlay')) {
+                foreach ($playList->lastPlay as $j => $lastPlayHash) {
                       if (isset($newStore->list[$i])) {
-                        if (property_exists($lastPlayHash, 'hashSelectedRemote')) {
+                    if(property_exists($lastPlayHash, 'hashSelectedRemote')) {
                           if (!isset($newStore->list[$i]->lastPlay)) {
                             $newStore->list[$i]->lastPlay = new stdClass();
                           }
@@ -41,8 +41,8 @@
                             $newStore->list[$i]->lastPlay->{$j} = new stdClass();
                           }
                           $newStore->list[$i]->lastPlay->{$j}->hashSelectedRemote = $lastPlayHash->hashSelectedRemote;
-                        }
-                        if (property_exists($lastPlayHash, 'recentRemote')) {
+                    }
+                    if(property_exists($lastPlayHash, 'recentRemote')) {
                           if (!isset($newStore->list[$i]->lastPlay)) {
                             $newStore->list[$i]->lastPlay = new stdClass();
                           }
@@ -50,26 +50,26 @@
                             $newStore->list[$i]->lastPlay->{$j} = new stdClass();
                           }
                           $newStore->list[$i]->lastPlay->{$j}->recentRemote = $lastPlayHash->recentRemote;
-                        }
-                      }
-                    }
-                  }
-                  //Item specific
-                  foreach ($playList->list as $j => $playListItem) {
-                    if (isset($newStore->list[$i]->list) && array_key_exists($j, $newStore->list[$i]->list)) {
-                      if (property_exists($playListItem, 'whatSelectedRemote')) {
-                        $newStore->list[$i]->list[$j]->whatSelectedRemote = $playListItem->whatSelectedRemote;
-                      }
-                      if (property_exists($playListItem, 'hashSelectedRemote')) {
-                        $newStore->list[$i]->list[$j]->hashSelectedRemote = $playListItem->hashSelectedRemote;
-                      }
-                      if (property_exists($playListItem, 'recentRemote')) {
-                        $newStore->list[$i]->list[$j]->recentRemote = $playListItem->recentRemote;
-                      }
                     }
                   }
                 }
               }
+              //Item specific
+              foreach ($playList->list as $j => $playListItem) {
+                    if (isset($newStore->list[$i]->list) && array_key_exists($j, $newStore->list[$i]->list)) {
+                  if (property_exists($playListItem, 'whatSelectedRemote')) {
+                        $newStore->list[$i]->list[$j]->whatSelectedRemote = $playListItem->whatSelectedRemote;
+                  }
+                  if (property_exists($playListItem, 'hashSelectedRemote')) {
+                        $newStore->list[$i]->list[$j]->hashSelectedRemote = $playListItem->hashSelectedRemote;
+                  }
+                  if (property_exists($playListItem, 'recentRemote')) {
+                        $newStore->list[$i]->list[$j]->recentRemote = $playListItem->recentRemote;
+                  }
+                }
+              }
+            }
+          }          
 
               $tc->setStored($newStore);
 
@@ -80,30 +80,30 @@
               $systemEnabled = property_exists($newStore, 'system') && $newStore->system === true;
               $schedulerEnabled = !property_exists($newStore, 'schedulerEnabled') || $newStore->schedulerEnabled === true;
               updateCronJob($systemEnabled && $schedulerEnabled);
-            }
+        }
             $tc->releaseLock('store');
-            break;
-          #Load settings and send to client. Use default if none yet stored.
-          case 'load':
+        break;
+      #Load settings and send to client. Use default if none yet stored.
+      case 'load':
             $tc->getLock('load');
             $stored = $tc->loadStored();
             header('Content-Type: application/json');
             echo json_encode($stored, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
             $tc->releaseLock('load');
-            break;
-          #Return default settings to client
-          case 'defaults':
-            if (file_exists(PERSISTENTFILEDEFAULT)) {
+        break;
+      #Return default settings to client
+      case 'defaults':
+        if (file_exists(PERSISTENTFILEDEFAULT)) {
               header('Content-Type: application/json');
-              echo file_get_contents(PERSISTENTFILEDEFAULT);
-            }
-            break;
+          echo file_get_contents(PERSISTENTFILEDEFAULT);
+        }
+        break;
           #Is client on LAN or WAN?
-          case 'lan':
+      case 'lan':
             echo clientInSameSubnet()?'lan':'wan';
-            break;
-          #List files in directory
-          case 'listFiles':
+        break;
+      #List files in directory
+      case 'listFiles':
             $phash = $_REQUEST['phash'] ?? '';
             if (!preg_match('/^[a-zA-Z0-9_]+$/', $phash)) {
                 header('Content-Type: application/json');
@@ -112,19 +112,20 @@
             }
             header('Content-Type: application/json');
             echo json_encode(listFiles ($phash), JSON_PRETTY_PRINT);
-            break;
-          #Play a song
-          case 'play':
-            if (!clientInSameSubnet()) {
-              http_response_code(403);
-              die('Can not play song from WAN');
-            }
-            checkOsCommands ();
-            if (isset($_REQUEST['index'])) {
+        break;
+      #Play a song
+      case 'play':
+        if (!clientInSameSubnet()) {
+          http_response_code(403);
+          die('Can not play song from WAN');
+        }
+        checkOsCommands ();
+        checkBusyBoxCommands ();
+        if (isset($_REQUEST['index'])) {
               $index = (int)$_REQUEST['index'];
               $tc->getLock('play');
               $tc->loadStored();
-              playEntry ($index);
+          playEntry ($index);
               $tc->saveStored();
               $tc->releaseLock('play');
             }
@@ -135,6 +136,7 @@
               die('Can not set volume from WAN');
             }
             checkOsCommands ();
+            checkBusyBoxCommands ();
             if (isset($_REQUEST['index'])) {
               $index = (int)$_REQUEST['index'];
               $tc->loadStored();
@@ -143,32 +145,34 @@
               }
               $oldId = exec('ps aux | grep -F -v grep | grep -F mplayer | grep -P -o "sid [0-9]+ -x [0-9]+$" | tr -cd "0-9\-"');
               setPlayerVolumeAndLength($index, false, '', $oldId, false, getMplayerAudioOutput());
-            }
-            break;
-          case 'stop':
-            if (!clientInSameSubnet()) {
-              http_response_code(403);
-              die('Can not stop song from WAN');
-            }
-            checkOsCommands ();
-            stopPlayer();
-            break;
-          case 'next':
-            if (!clientInSameSubnet()) {
-              http_response_code(403);
-              die('Can not find next remote track from WAN');
-            }
-            checkOsCommands ();
+        }
+        break;
+      case 'stop':
+        if (!clientInSameSubnet()) {
+          http_response_code(403);
+          die('Can not stop song from WAN');
+        }
+        checkOsCommands ();
+        checkBusyBoxCommands ();
+        stopPlayer();
+        break;
+      case 'next':
+        if (!clientInSameSubnet()) {
+          http_response_code(403);
+          die('Can not find next remote track from WAN');
+        }
+        checkOsCommands ();
+        checkBusyBoxCommands ();
             $tc->getLock('next');
             $tc->loadStored();
             $tc->findNext();
             $tc->saveStored();
             $tc->releaseLock('next');
-            break;
-          case 'bankhols':
+        break;
+      case 'bankhols':
             header('Content-Type: application/json');
-            echo json_encode(calculateBankHolidays(date('Y')));
-            break;
+        echo json_encode(calculateBankHolidays(date('Y')));
+        break;
           case 'listSounds':
             $oldErrorLevel = error_reporting(E_ERROR | E_PARSE);
             $phash = isset($_REQUEST['phash']) ? $_REQUEST['phash'] : '';
@@ -218,11 +222,11 @@
             header('Content-Type: application/json');
             echo json_encode(uploadFiles($path, $_FILES));
             break;
-          case 'time':
+      case 'time':
             $tc->loadStored();
             header('Content-Type: application/json');
-            echo json_encode([date("F j, Y, g:i a", time ()), date_default_timezone_get ()]);
-            break;
+        echo json_encode([date("F j, Y, g:i a", time ()), date_default_timezone_get ()]);
+        break;
           case 'audioDevices':
             header('Content-Type: application/json');
             echo json_encode(getAudioDevices());
@@ -250,17 +254,17 @@
             header('Content-Type: application/json');
             echo json_encode(['device' => $resolved]);
             break;
-          case 'factoryreset':
-            if (!clientInSameSubnet() || !sys_writable()) {
-              die('Factory reset denied');
-            }
+      case 'factoryreset':
+        if (!clientInSameSubnet() || !sys_writable()) {
+          die('Factory reset denied');
+        }
             $tc->getLock('factoryreset');
             if (file_exists(PERSISTENTFILE)) unlink(PERSISTENTFILE);
             if (file_exists(PLAYLOG)) unlink(PLAYLOG);
             if (file_exists(DEBUGLOG)) unlink(DEBUGLOG);
             $tc->releaseLock('factoryreset');
-            die('Factory reset done');
-            break;
+        die('Factory reset done');
+        break;
         }
     } catch (Exception $e) {
         errorLog($e);
