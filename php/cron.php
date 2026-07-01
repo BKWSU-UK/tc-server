@@ -11,8 +11,7 @@
     exit(0);
   }
 
-  checkOsCommands ();
-  checkBusyBoxCommands ();
+  checkDependencies();
   
   function next_and_store() {
     global $tc;

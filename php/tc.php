@@ -119,8 +119,7 @@
           http_response_code(403);
           die('Can not play song from WAN');
         }
-        checkOsCommands ();
-        checkBusyBoxCommands ();
+        checkDependencies();
         if (isset($_REQUEST['index'])) {
               $index = (int)$_REQUEST['index'];
               $tc->getLock('play');
@@ -135,8 +134,7 @@
               http_response_code(403);
               die('Can not set volume from WAN');
             }
-            checkOsCommands ();
-            checkBusyBoxCommands ();
+            checkDependencies();
             if (isset($_REQUEST['index'])) {
               $index = (int)$_REQUEST['index'];
               $tc->loadStored();
@@ -152,8 +150,7 @@
           http_response_code(403);
           die('Can not stop song from WAN');
         }
-        checkOsCommands ();
-        checkBusyBoxCommands ();
+        checkDependencies();
         stopPlayer();
         break;
       case 'next':
@@ -163,6 +160,7 @@
         }
         checkOsCommands ();
         checkBusyBoxCommands ();
+        checkPhpExtensions ();
             $tc->getLock('next');
             $tc->loadStored();
             $tc->findNext();
@@ -170,6 +168,7 @@
             $tc->releaseLock('next');
         break;
       case 'bankhols':
+        checkPhpExtensions ();
             header('Content-Type: application/json');
         echo json_encode(calculateBankHolidays(date('Y')));
         break;
@@ -218,6 +217,7 @@
               header('Content-Type: application/json');
               die(json_encode(['error' => 'Not allowed from WAN']));
             }
+            checkPhpExtensions ();
             $path = isset($_REQUEST['path']) ? $_REQUEST['path'] : '';
             header('Content-Type: application/json');
             echo json_encode(uploadFiles($path, $_FILES));

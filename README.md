@@ -27,13 +27,14 @@ Traffic Control can run as a Home Assistant add-on, which handles all dependenci
 #### Prerequisites
 
 - **Web Server:** Apache or Nginx with PHP support.
-- **PHP:** Version 7.4 or higher recommended.
-- **Operating System:** Linux (tested on Raspberry Pi OS / Debian).
+- **PHP:** Version 7.4 or higher recommended (needs the `calendar`, `fileinfo`, `mbstring` and `session` extensions).
+- **Operating System:** Linux — Debian/Ubuntu/Raspberry Pi OS **or** Alpine. `deploy.sh` auto-detects the distro (`apt`+systemd vs `apk`+OpenRC) and installs the right packages.
 - **Audio Hardware:** ALSA-compatible sound card or Bluetooth audio.
 - **System Utilities:**
   - `mplayer` (for audio playback)
   - `amixer` (for volume control)
   - `bc` (for calculations)
+  - **On Alpine:** the GNU toolchain (`coreutils`, `grep`, `procps`, `bash`, `util-linux`) is also required — the app's scheduler relies on GNU behaviour rather than BusyBox. `deploy.sh` installs these automatically.
 
 #### Steps
 

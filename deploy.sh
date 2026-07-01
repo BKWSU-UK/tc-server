@@ -6,117 +6,179 @@
 set -e
 
 DEST_DIR="/var/www/html/trafficcontrol"
-WEB_USER="www-data"
-WEB_GROUP="www-data"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-echo "Starting deployment to $DEST_DIR..."
+# Detect OS (Alpine/Debian) and load per-distro paths, users and helpers.
+# shellcheck source=scripts/os-detect.sh
+source "$SCRIPT_DIR/scripts/os-detect.sh"
+
+# Use sudo only when not already root (Alpine minimal has no sudo).
+if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
+
+echo "Starting deployment to $DEST_DIR (OS: $TC_OS, app user: $APP_USER, nginx: $NGINX_USER)..."
 
 # 1. Install required packages
 echo "Installing required packages..."
-sudo apt update
-sudo apt install -y nginx php-fpm php-cli mplayer alsa-utils bc
+if [ "$TC_OS" = "alpine" ]; then
+    $SUDO apk update
+    # Pick the newest available PHP 8.x package series
+    PHPV=""
+    for v in 84 83 82 81; do
+        if $SUDO apk add --no-cache --simulate "php$v" >/dev/null 2>&1; then PHPV="$v"; break; fi
+    done
+    [ -n "$PHPV" ] || PHPV=83
+    echo "Using PHP package series: php${PHPV}"
+    # nginx, PHP + required extensions, audio tools, and the GNU toolchain
+    # (coreutils, grep w/ PCRE, procps, bash, util-linux) so exec() commands
+    # behave like GNU rather than BusyBox. dcron provides crond + /etc/crontabs.
+    $SUDO apk add --no-cache \
+        nginx rsync \
+        "php${PHPV}" "php${PHPV}-fpm" "php${PHPV}-cli" \
+        "php${PHPV}-json" "php${PHPV}-mbstring" "php${PHPV}-session" \
+        "php${PHPV}-ctype" "php${PHPV}-fileinfo" "php${PHPV}-calendar" \
+        "php${PHPV}-opcache" "php${PHPV}-phar" "php${PHPV}-openssl" \
+        mplayer alsa-utils pulseaudio-utils bc \
+        coreutils grep procps bash util-linux tzdata dcron
+    $SUDO ln -sf "/usr/bin/php${PHPV}" /usr/bin/php
+else
+    $SUDO apt update
+    $SUDO apt install -y nginx php-fpm php-cli php-mbstring php-calendar \
+        mplayer alsa-utils bc rsync cron
+fi
 
-# Determine installed PHP version
-PHP_VERSION=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
-echo "Detected PHP version: $PHP_VERSION"
+# Re-source now that PHP is installed so version-derived paths are populated.
+# shellcheck source=scripts/os-detect.sh
+source "$SCRIPT_DIR/scripts/os-detect.sh"
+echo "Detected PHP version: $TC_PHP_DOT"
 
 # 2. Create destination directory if it doesn't exist
 if [ ! -d "$DEST_DIR" ]; then
     echo "Creating destination directory..."
-    sudo mkdir -p "$DEST_DIR"
+    $SUDO mkdir -p "$DEST_DIR"
 fi
 
 # 3. Sync files (excluding git, system files, and local persistent data)
 echo "Syncing files..."
-sudo rsync -av --delete \
+$SUDO rsync -av --delete \
     --exclude '.git/' \
     --exclude '.tcsys/' \
     --exclude 'README.md' \
     --exclude 'deploy.sh' \
     ./ "$DEST_DIR/"
 
-# 4. Ensure system directory exists
-if [ ! -d "$DEST_DIR/.tcsys" ]; then
-    echo "Creating .tcsys directory..."
-    sudo mkdir -p "$DEST_DIR/.tcsys"
+# 4. Ensure system and Music directories exist
+$SUDO mkdir -p "$DEST_DIR/.tcsys" "$DEST_DIR/Music"
+
+# 5. Create the dedicated app user (Alpine) and grant it ALSA access.
+# php-fpm/cron run as this low-priv user; it is the only account in "audio".
+if [ "$TC_OS" = "alpine" ]; then
+    getent group "$APP_GROUP" >/dev/null 2>&1 || $SUDO addgroup -S "$APP_GROUP"
+    id "$APP_USER" >/dev/null 2>&1 || \
+        $SUDO adduser -S -D -H -s /sbin/nologin -G "$APP_GROUP" "$APP_USER"
 fi
-
-# 5. Ensure Music directory exists
-if [ ! -d "$DEST_DIR/Music" ]; then
-    echo "Creating Music directory..."
-    sudo mkdir -p "$DEST_DIR/Music"
-fi
-
-# 6. Set ownership and permissions
-echo "Setting permissions..."
-sudo chown -R $WEB_USER:$WEB_GROUP "$DEST_DIR"
-sudo chmod -R 755 "$DEST_DIR"
-sudo chmod -R 775 "$DEST_DIR/.tcsys"
-sudo chmod -R 775 "$DEST_DIR/Music"
-
-# 7. Ensure www-data is in audio group for ALSA access
 if getent group audio >/dev/null 2>&1; then
-    if ! id -nG "$WEB_USER" 2>/dev/null | tr ' ' '\n' | grep -qx audio; then
-        echo "Adding $WEB_USER to audio group..."
-        sudo usermod -aG audio "$WEB_USER"
+    if ! id -nG "$APP_USER" 2>/dev/null | tr ' ' '\n' | grep -qx audio; then
+        echo "Adding $APP_USER to audio group..."
+        if [ "$TC_OS" = "alpine" ]; then
+            $SUDO addgroup "$APP_USER" audio
+        else
+            $SUDO usermod -aG audio "$APP_USER"
+        fi
     else
-        echo "$WEB_USER is already in audio group"
+        echo "$APP_USER is already in audio group"
     fi
 fi
 
-# 8. Verify required dependencies
+# 6. Set ownership and permissions.
+# Files are owned by APP_USER (php-fpm) and world-readable so the nginx worker
+# (a different user on Alpine) can still serve static assets and media.
+echo "Setting permissions..."
+$SUDO chown -R "$APP_USER:$APP_GROUP" "$DEST_DIR"
+$SUDO chmod -R 755 "$DEST_DIR"
+$SUDO chmod -R 775 "$DEST_DIR/.tcsys" "$DEST_DIR/Music"
+
+# 7. Verify required dependencies
 echo "Verifying dependencies..."
-for cmd in mplayer amixer bc php; do
-    if ! command -v $cmd &> /dev/null; then
+for cmd in mplayer amixer bc php bash grep ps date; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
         echo "Error: $cmd is not installed. Installation may have failed."
         exit 1
     fi
 done
 echo "All dependencies verified."
 
-# 9. Install nginx configuration
+# 8. Install nginx configuration (patch the fastcgi_pass target)
 echo "Installing nginx configuration..."
-sudo sed "s/php8.4-fpm.sock/php${PHP_VERSION}-fpm.sock/" "$SCRIPT_DIR/trafficcontrol.nginx.conf" \
-    | sudo tee /etc/nginx/sites-available/trafficcontrol > /dev/null
-
-if [ ! -L /etc/nginx/sites-enabled/trafficcontrol ]; then
-    sudo ln -s /etc/nginx/sites-available/trafficcontrol /etc/nginx/sites-enabled/
+TMP_CONF="$(mktemp)"
+sed "s|PHP_FPM_PASS|${TC_FASTCGI_PASS}|g" "$SCRIPT_DIR/trafficcontrol.nginx.conf" > "$TMP_CONF"
+if [ "$TC_OS" = "alpine" ]; then
+    $SUDO mkdir -p /etc/nginx/http.d
+    $SUDO cp "$TMP_CONF" /etc/nginx/http.d/trafficcontrol.conf
+    # Run the php-fpm pool as APP_USER; keep the distro default TCP listener.
+    # Patterns match active (uncommented) lines only, so they work with BusyBox sed.
+    if [ -f "$PHP_FPM_POOL" ]; then
+        $SUDO sed -i \
+            -e "s|^user = .*|user = ${APP_USER}|" \
+            -e "s|^group = .*|group = ${APP_GROUP}|" \
+            "$PHP_FPM_POOL"
+    fi
+else
+    $SUDO cp "$TMP_CONF" /etc/nginx/sites-available/trafficcontrol
+    [ -L /etc/nginx/sites-enabled/trafficcontrol ] || \
+        $SUDO ln -s /etc/nginx/sites-available/trafficcontrol /etc/nginx/sites-enabled/
+    # Disable the default nginx site so trafficcontrol becomes the default server
+    if [ -L /etc/nginx/sites-enabled/default ]; then
+        echo "Disabling default nginx site..."
+        $SUDO rm /etc/nginx/sites-enabled/default
+    fi
 fi
-
-# Disable the default nginx site so trafficcontrol becomes the default server
-if [ -L /etc/nginx/sites-enabled/default ]; then
-    echo "Disabling default nginx site..."
-    sudo rm /etc/nginx/sites-enabled/default
-fi
+rm -f "$TMP_CONF"
 
 echo "Testing nginx configuration..."
-sudo nginx -t
+$SUDO nginx -t
 
-# 10. Set up system cron job for www-data
+# 9. Set up the scheduler cron job
 echo "Setting up cron job..."
-CRON_FILE="/etc/cron.d/trafficcontrol"
-
-sudo tee "$CRON_FILE" > /dev/null << EOF
-# Traffic Control scheduler - runs as www-data
+if [ "$TC_OS" = "alpine" ]; then
+    # BusyBox/dcron reads per-user crontabs from /etc/crontabs/<user> (no user field)
+    $SUDO mkdir -p /etc/crontabs
+    printf '* * * * * /usr/bin/php %s/php/cron.php >> %s/.tcsys/cron.log 2>&1\n' \
+        "$DEST_DIR" "$DEST_DIR" | $SUDO tee "/etc/crontabs/${APP_USER}" > /dev/null
+    $SUDO chmod 600 "/etc/crontabs/${APP_USER}"
+    echo "Created crontab at /etc/crontabs/${APP_USER}"
+else
+    CRON_FILE="/etc/cron.d/trafficcontrol"
+    $SUDO tee "$CRON_FILE" > /dev/null << EOF
+# Traffic Control scheduler - runs as $APP_USER
 # Uses ALSA directly for audio output (works on headless servers)
 SHELL=/bin/bash
-* * * * * $WEB_USER /usr/bin/php $DEST_DIR/php/cron.php >> $DEST_DIR/.tcsys/cron.log 2>&1
+* * * * * $APP_USER /usr/bin/php $DEST_DIR/php/cron.php >> $DEST_DIR/.tcsys/cron.log 2>&1
 EOF
-
-sudo chmod 644 "$CRON_FILE"
-echo "Created system cron at $CRON_FILE"
-
-# 11. Add trafficcontrol.local to hosts file
-if ! grep -q "trafficcontrol.local" /etc/hosts; then
-    echo "Adding trafficcontrol.local to /etc/hosts..."
-    echo "127.0.0.1 trafficcontrol.local" | sudo tee -a /etc/hosts > /dev/null
+    $SUDO chmod 644 "$CRON_FILE"
+    echo "Created system cron at $CRON_FILE"
 fi
 
-# 12. Restart services to apply changes
+# 10. Add trafficcontrol.local to hosts file
+if ! grep -q "trafficcontrol.local" /etc/hosts; then
+    echo "Adding trafficcontrol.local to /etc/hosts..."
+    echo "127.0.0.1 trafficcontrol.local" | $SUDO tee -a /etc/hosts > /dev/null
+fi
+
+# 11. Enable and (re)start services to apply changes
 echo "Restarting services..."
-sudo systemctl reload nginx
-sudo systemctl restart "php${PHP_VERSION}-fpm"
+if [ "$TC_OS" = "alpine" ]; then
+    $SUDO rc-update add "php-fpm${TC_PHP_NODOT}" default 2>/dev/null || \
+        $SUDO rc-update add php-fpm default 2>/dev/null || true
+    $SUDO rc-update add nginx default 2>/dev/null || true
+    $SUDO rc-update add crond default 2>/dev/null || true
+    $SUDO rc-service "php-fpm${TC_PHP_NODOT}" restart 2>/dev/null || \
+        $SUDO rc-service php-fpm restart 2>/dev/null || true
+    $SUDO rc-service nginx restart
+    $SUDO rc-service crond restart 2>/dev/null || $SUDO rc-service dcron restart 2>/dev/null || true
+else
+    $SUDO systemctl reload nginx
+    $SUDO systemctl restart "php${TC_PHP_DOT}-fpm"
+fi
 
 echo ""
 echo "Deployment complete."
@@ -125,4 +187,4 @@ echo "The application is available at: http://trafficcontrol.local/"
 echo "To access from other devices, add '$(hostname -I | awk '{print $1}') trafficcontrol.local' to their /etc/hosts"
 echo ""
 echo "Audio output uses ALSA directly (works on headless servers)."
-echo "If this is the first deployment, reboot for www-data audio group to take effect."
+echo "If this is the first deployment, restart php-fpm (done above) for the $APP_USER audio group to take effect."

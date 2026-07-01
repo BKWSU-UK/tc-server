@@ -17,6 +17,10 @@
   define ( 'DB_PER_VOL_UNIT', 0.46 );
   define ( 'OS_COMMANDS', 'bc|amixer|mplayer|bash');
   define ( 'NO_BUSYBOX_COMMAND', 'grep|date|ps');
+  // PHP extensions the app relies on that are NOT bundled/enabled by default on
+  // Alpine (separate phpXX-* packages) or Ubuntu: calendar (easter_days),
+  // ctype (ctype_digit), fileinfo (mime_content_type).
+  define ( 'PHP_EXTENSIONS', 'calendar|ctype|fileinfo|session|mbstring');
 
   //This may be changed by some functions but must be set now
   //to prevent warnings
@@ -1090,6 +1094,26 @@ function calculateBankHolidays($yr) {
     if (strlen($flunked) > 0) {
       die('Required OS command(s) :' . $flunked . ', are Busybox version. The GNU versions (coreutils, grep, procps) are required.');
     }
+  }
+  function checkPhpExtensions () {
+    $flunked = "";
+    $extensions = explode('|', PHP_EXTENSIONS);
+    foreach ($extensions as $extension) {
+      if (!extension_loaded($extension)) {
+        debugLog("Required PHP extension, $extension, not loaded");
+        $flunked .= ', ' . $extension;
+      }
+    }
+    if (strlen($flunked) > 0) {
+      $missing = ltrim($flunked, ', ');
+      die('Required PHP extension(s) not installed: ' . $missing . '. Install the matching package(s) and restart php-fpm - on Alpine: "apk add php<version>-<extension>" (e.g. php85-fileinfo); on Debian/Ubuntu: "apt install php-<extension>".');
+    }
+  }
+
+  function checkDependencies() {
+    checkOsCommands();
+    checkBusyBoxCommands();
+    checkPhpExtensions();
   }
   
   function debugLog($message) {
