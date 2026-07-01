@@ -23,7 +23,7 @@ if [ "$TC_OS" = "alpine" ]; then
     $SUDO apk update
     # Pick the newest available PHP 8.x package series
     PHPV=""
-    for v in 84 83 82 81; do
+    for v in 85 84 83 82 81; do
         if $SUDO apk add --no-cache --simulate "php$v" >/dev/null 2>&1; then PHPV="$v"; break; fi
     done
     [ -n "$PHPV" ] || PHPV=83
