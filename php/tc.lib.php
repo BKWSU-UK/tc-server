@@ -513,9 +513,9 @@ function calculateBankHolidays($yr) {
     if ($hasMixerControl) {
       $escapedControlId = escapeshellarg($controlId);
       if ($isMapped) {
-        $command = 'amixer ' . $devCardInfo . ' -M set ' . $escapedControlId . ' -- ' . voltoDb($combinedVolume) . 'dB >/dev/null 2>&1';
+        $command = 'amixer ' . $devCardInfo . ' -M set ' . $escapedControlId . ' -- ' . voltoDb($combinedVolume) . 'dB unmute >/dev/null 2>&1';
       } else {
-        $command = 'amixer ' . $devCardInfo . ' cset ' . $escapedControlId . ' ' . $combinedLogVolume . '% >/dev/null 2>&1';
+        $command = 'amixer ' . $devCardInfo . ' cset ' . $escapedControlId . ' ' . $combinedLogVolume . '% unmute >/dev/null 2>&1';
       }
       debugLog($command);
       exec ($command);      
