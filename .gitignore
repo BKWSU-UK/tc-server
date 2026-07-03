@@ -28,6 +28,5 @@ composer.phar
 .phpunit.result.cache
 
 # Project specific
-/.tcsys/
 
 .svn/

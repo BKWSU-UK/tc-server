@@ -7,16 +7,16 @@ FROM $BUILD_FROM
 RUN if command -v apk >/dev/null 2>&1; then \
         # --- Alpine ---
         PHPV=""; \
-        for v in 84 83 82 81; do \
+        for v in 85 84 83 82 81; do \
             if apk info "php$v" >/dev/null 2>&1 || apk add --no-cache --simulate "php$v" >/dev/null 2>&1; then PHPV="$v"; break; fi; \
         done; \
         [ -n "$PHPV" ] || PHPV=83; \
         apk add --no-cache \
             nginx \
             "php${PHPV}" "php${PHPV}-fpm" "php${PHPV}-cli" \
-            "php${PHPV}-json" "php${PHPV}-mbstring" "php${PHPV}-session" \
+            "php${PHPV}-mbstring" "php${PHPV}-session" \
             "php${PHPV}-ctype" "php${PHPV}-fileinfo" "php${PHPV}-calendar" \
-            "php${PHPV}-opcache" "php${PHPV}-phar" "php${PHPV}-openssl" \
+            "php${PHPV}-phar" "php${PHPV}-openssl" \
             mplayer alsa-utils pulseaudio-utils bc \
             coreutils grep procps bash util-linux tzdata \
         && ln -sf "/usr/bin/php${PHPV}" /usr/bin/php \

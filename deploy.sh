@@ -34,9 +34,9 @@ if [ "$TC_OS" = "alpine" ]; then
     $SUDO apk add --no-cache \
         nginx rsync \
         "php${PHPV}" "php${PHPV}-fpm" "php${PHPV}-cli" \
-        "php${PHPV}-json" "php${PHPV}-mbstring" "php${PHPV}-session" \
+        "php${PHPV}-mbstring" "php${PHPV}-session" \
         "php${PHPV}-ctype" "php${PHPV}-fileinfo" "php${PHPV}-calendar" \
-        "php${PHPV}-opcache" "php${PHPV}-phar" "php${PHPV}-openssl" \
+        "php${PHPV}-phar" "php${PHPV}-openssl" \
         mplayer alsa-utils pulseaudio-utils bc \
         coreutils grep procps bash util-linux tzdata dcron
     $SUDO ln -sf "/usr/bin/php${PHPV}" /usr/bin/php
@@ -114,6 +114,10 @@ sed "s|PHP_FPM_PASS|${TC_FASTCGI_PASS}|g" "$SCRIPT_DIR/trafficcontrol.nginx.conf
 if [ "$TC_OS" = "alpine" ]; then
     $SUDO mkdir -p /etc/nginx/http.d
     $SUDO cp "$TMP_CONF" /etc/nginx/http.d/trafficcontrol.conf
+    $SUDO chmod 644 /etc/nginx/http.d/trafficcontrol.conf
+    # Remove Alpine's default site (the port-80 default_server) so requests by
+    # localhost/IP reach trafficcontrol instead of returning 404.
+    $SUDO rm -f /etc/nginx/http.d/default.conf
     # Run the php-fpm pool as APP_USER; keep the distro default TCP listener.
     # Patterns match active (uncommented) lines only, so they work with BusyBox sed.
     if [ -f "$PHP_FPM_POOL" ]; then
@@ -183,8 +187,12 @@ fi
 echo ""
 echo "Deployment complete."
 echo ""
+# Determine the primary LAN IP in a way that works on both BusyBox (Alpine)
+# and GNU/iproute2 (Debian); hostname -I is not available on BusyBox.
+LAN_IP="$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')"
+[ -n "$LAN_IP" ] || LAN_IP="$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1)"
 echo "The application is available at: http://trafficcontrol.local/"
-echo "To access from other devices, add '$(hostname -I | awk '{print $1}') trafficcontrol.local' to their /etc/hosts"
+echo "To access from other devices, add '${LAN_IP} trafficcontrol.local' to their /etc/hosts"
 echo ""
 echo "Audio output uses ALSA directly (works on headless servers)."
 echo "If this is the first deployment, restart php-fpm (done above) for the $APP_USER audio group to take effect."
