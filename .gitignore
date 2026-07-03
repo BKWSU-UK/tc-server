@@ -27,6 +27,10 @@ composer.phar
 .php_cs.cache
 .phpunit.result.cache
 
+# Exclude old copyright risk music
+Music/Hourly
+Music/Longer
+
 # Project specific
 # Track only the default playlist under .tcsys; everything else there
 # (playListDb.JSON, *.lock, *.log, scheduler_enabled, debug flag) is runtime
