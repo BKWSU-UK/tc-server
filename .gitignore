@@ -28,5 +28,10 @@ composer.phar
 .phpunit.result.cache
 
 # Project specific
+# Track only the default playlist under .tcsys; everything else there
+# (playListDb.JSON, *.lock, *.log, scheduler_enabled, debug flag) is runtime
+# state created on the deployed box and must not be committed.
+/.tcsys/*
+!/.tcsys/playListDbDefault.JSON
 
 .svn/

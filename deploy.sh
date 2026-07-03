@@ -5,8 +5,18 @@
 
 set -e
 
+# Ensure git checks out world-readable files (644) and traversable dirs (755)
+# regardless of the invoking shell's umask; nginx must be able to read them.
+umask 022
+
 DEST_DIR="/var/www/html/trafficcontrol"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Git source for the deployed app. The repo is public, so no auth is needed.
+# Override via environment if deploying a fork/branch:
+#   TC_REPO_URL=... TC_BRANCH=... sudo -E bash deploy.sh
+REPO_URL="${TC_REPO_URL:-https://github.com/BKWSU-UK/tc-server.git}"
+BRANCH="${TC_BRANCH:-Alpine-based}"
 
 # Detect OS (Alpine/Debian) and load per-distro paths, users and helpers.
 # shellcheck source=scripts/os-detect.sh
@@ -32,7 +42,7 @@ if [ "$TC_OS" = "alpine" ]; then
     # (coreutils, grep w/ PCRE, procps, bash, util-linux) so exec() commands
     # behave like GNU rather than BusyBox. dcron provides crond + /etc/crontabs.
     $SUDO apk add --no-cache \
-        nginx rsync \
+        nginx git \
         "php${PHPV}" "php${PHPV}-fpm" "php${PHPV}-cli" \
         "php${PHPV}-mbstring" "php${PHPV}-session" \
         "php${PHPV}-ctype" "php${PHPV}-fileinfo" "php${PHPV}-calendar" \
@@ -43,7 +53,7 @@ if [ "$TC_OS" = "alpine" ]; then
 else
     $SUDO apt update
     $SUDO apt install -y nginx php-fpm php-cli php-mbstring php-calendar \
-        mplayer alsa-utils bc rsync cron
+        mplayer alsa-utils bc git cron
 fi
 
 # Re-source now that PHP is installed so version-derived paths are populated.
@@ -51,25 +61,32 @@ fi
 source "$SCRIPT_DIR/scripts/os-detect.sh"
 echo "Detected PHP version: $TC_PHP_DOT"
 
-# 2. Create destination directory if it doesn't exist
-if [ ! -d "$DEST_DIR" ]; then
-    echo "Creating destination directory..."
-    $SUDO mkdir -p "$DEST_DIR"
+# 2. Deploy/update the application from git.
+#    $DEST_DIR itself becomes a git working tree, so updating the app is simply
+#    a matter of re-running this script (it fetches the latest) or running
+#    `git pull` inside $DEST_DIR. A shallow checkout keeps the (large) tracked
+#    Music samples from pulling full history.
+echo "Deploying branch '$BRANCH' from $REPO_URL to $DEST_DIR..."
+$SUDO mkdir -p "$DEST_DIR"
+# Let root/sudo operate on a repo owned by $APP_USER (chowned below) without
+# git's "dubious ownership" safeguard aborting the run.
+$SUDO git config --global --get-all safe.directory 2>/dev/null | grep -qxF "$DEST_DIR" || \
+    $SUDO git config --global --add safe.directory "$DEST_DIR"
+if [ ! -d "$DEST_DIR/.git" ]; then
+    $SUDO git init -q "$DEST_DIR"
+    $SUDO git -C "$DEST_DIR" remote add origin "$REPO_URL"
 fi
+$SUDO git -C "$DEST_DIR" remote set-url origin "$REPO_URL"
+$SUDO git -C "$DEST_DIR" fetch --depth 1 origin "$BRANCH"
+# checkout -f overwrites tracked files but leaves gitignored runtime state in
+# .tcsys/ (playListDb.JSON, logs, locks) and any user-uploaded Music intact.
+$SUDO git -C "$DEST_DIR" checkout -f -B "$BRANCH" "origin/$BRANCH"
 
-# 3. Sync files (excluding git, system files, and local persistent data)
-echo "Syncing files..."
-$SUDO rsync -av --delete \
-    --exclude '.git/' \
-    --exclude '.tcsys/' \
-    --exclude 'README.md' \
-    --exclude 'deploy.sh' \
-    ./ "$DEST_DIR/"
-
-# 4. Ensure system and Music directories exist
+# 3. Ensure the runtime system dir and Music dir exist (.tcsys ships only the
+#    default playlist via git; everything else in it is created at runtime).
 $SUDO mkdir -p "$DEST_DIR/.tcsys" "$DEST_DIR/Music"
 
-# 5. Create the dedicated app user (Alpine) and grant it ALSA access.
+# 4. Create the dedicated app user (Alpine) and grant it ALSA access.
 # php-fpm/cron run as this low-priv user; it is the only account in "audio".
 if [ "$TC_OS" = "alpine" ]; then
     getent group "$APP_GROUP" >/dev/null 2>&1 || $SUDO addgroup -S "$APP_GROUP"
@@ -89,15 +106,17 @@ if getent group audio >/dev/null 2>&1; then
     fi
 fi
 
-# 6. Set ownership and permissions.
-# Files are owned by APP_USER (php-fpm) and world-readable so the nginx worker
-# (a different user on Alpine) can still serve static assets and media.
-echo "Setting permissions..."
+# 5. Set ownership. The tree is owned by APP_USER so php-fpm can write runtime
+# state under .tcsys and uploads under Music (the owner has write access via the
+# 755 dir modes git checked out). Ownership is NOT tracked by git, so this keeps
+# `git status`/`git pull` clean. We deliberately avoid a blanket `chmod -R`,
+# which would flip the executable bit on every tracked file and permanently
+# dirty the working tree; git already checked out the correct file modes, and
+# world-readability for nginx is guaranteed by the umask set at the top.
+echo "Setting ownership..."
 $SUDO chown -R "$APP_USER:$APP_GROUP" "$DEST_DIR"
-$SUDO chmod -R 755 "$DEST_DIR"
-$SUDO chmod -R 775 "$DEST_DIR/.tcsys" "$DEST_DIR/Music"
 
-# 7. Verify required dependencies
+# 6. Verify required dependencies
 echo "Verifying dependencies..."
 for cmd in mplayer amixer bc php bash grep ps date; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
@@ -107,10 +126,10 @@ for cmd in mplayer amixer bc php bash grep ps date; do
 done
 echo "All dependencies verified."
 
-# 8. Install nginx configuration (patch the fastcgi_pass target)
+# 7. Install nginx configuration (patch the fastcgi_pass target)
 echo "Installing nginx configuration..."
 TMP_CONF="$(mktemp)"
-sed "s|PHP_FPM_PASS|${TC_FASTCGI_PASS}|g" "$SCRIPT_DIR/trafficcontrol.nginx.conf" > "$TMP_CONF"
+sed "s|PHP_FPM_PASS|${TC_FASTCGI_PASS}|g" "$DEST_DIR/trafficcontrol.nginx.conf" > "$TMP_CONF"
 if [ "$TC_OS" = "alpine" ]; then
     $SUDO mkdir -p /etc/nginx/http.d
     $SUDO cp "$TMP_CONF" /etc/nginx/http.d/trafficcontrol.conf
@@ -141,7 +160,7 @@ rm -f "$TMP_CONF"
 echo "Testing nginx configuration..."
 $SUDO nginx -t
 
-# 9. Set up the scheduler cron job
+# 8. Set up the scheduler cron job
 echo "Setting up cron job..."
 if [ "$TC_OS" = "alpine" ]; then
     # BusyBox/dcron reads per-user crontabs from /etc/crontabs/<user> (no user field)
@@ -162,13 +181,13 @@ EOF
     echo "Created system cron at $CRON_FILE"
 fi
 
-# 10. Add trafficcontrol.local to hosts file
+# 9. Add trafficcontrol.local to hosts file
 if ! grep -q "trafficcontrol.local" /etc/hosts; then
     echo "Adding trafficcontrol.local to /etc/hosts..."
     echo "127.0.0.1 trafficcontrol.local" | $SUDO tee -a /etc/hosts > /dev/null
 fi
 
-# 11. Enable and (re)start services to apply changes
+# 10. Enable and (re)start services to apply changes
 echo "Restarting services..."
 if [ "$TC_OS" = "alpine" ]; then
     $SUDO rc-update add "php-fpm${TC_PHP_NODOT}" default 2>/dev/null || \
@@ -196,3 +215,6 @@ echo "To access from other devices, add '${LAN_IP} trafficcontrol.local' to thei
 echo ""
 echo "Audio output uses ALSA directly (works on headless servers)."
 echo "If this is the first deployment, restart php-fpm (done above) for the $APP_USER audio group to take effect."
+echo ""
+echo "To update the application later, re-run this script (it fetches the latest"
+echo "'$BRANCH') or run: sudo git -C $DEST_DIR pull"
