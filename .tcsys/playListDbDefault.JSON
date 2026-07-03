@@ -348,7 +348,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Longer",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Longer/00 Bliss A Hundred Thousand Angels Track 10.wav.mp3",
           "hashSelectedLocal": "l1_TG9uZ2VyLzAwIEJsaXNzIEEgSHVuZHJlZCBUaG91c2FuZCBBbmdlbHMgVHJhY2sgMTAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -357,7 +357,7 @@
           "mime": "directory",
           "how": "seq",
           "volume": 80,
-          "howLong": "Full"
+          "howLong": "180"
         },
         {
           "time": "04 : 00 : AM",
@@ -396,7 +396,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -405,7 +405,7 @@
           "mime": "directory",
           "how": "rand",
           "volume": 80,
-          "howLong": "Full"
+          "howLong": "90"
         },
         {
           "time": "08 : 00 : AM",
@@ -428,7 +428,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -437,7 +437,7 @@
           "mime": "directory",
           "how": "rand",
           "volume": 80,
-          "howLong": "Full"
+          "howLong": "90"
         },
         {
           "time": "10 : 00 : AM",
@@ -460,7 +460,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -469,7 +469,7 @@
           "mime": "directory",
           "how": "rand",
           "volume": 80,
-          "howLong": "Full"
+          "howLong": "90"
         },
         {
           "time": "12 : 00 : PM",
@@ -492,7 +492,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/At the end.mp3",
           "hashSelectedLocal": "l1_SG91cmx5L0F0IHRoZSBlbmQubXAz",
           "whatSelectedRemote": "",
@@ -501,7 +501,7 @@
           "mime": "directory",
           "how": "rand",
           "volume": 80,
-          "howLong": "Full"
+          "howLong": "90"
         },
         {
           "time": "02 : 00 : PM",
@@ -524,7 +524,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -533,7 +533,7 @@
           "mime": "directory",
           "how": "rand",
           "volume": 80,
-          "howLong": "Full"
+          "howLong": "90"
         },
         {
           "time": "04 : 00 : PM",
@@ -556,7 +556,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -565,7 +565,7 @@
           "mime": "directory",
           "how": "rand",
           "volume": 80,
-          "howLong": "Full"
+          "howLong": "90"
         },
         {
           "time": "06 : 00 : PM",
@@ -588,7 +588,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -597,14 +597,14 @@
           "mime": "directory",
           "how": "rand",
           "volume": 80,
-          "howLong": "Full"
+          "howLong": "90"
         },
         {
           "time": "07 : 30 : PM",
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Longer",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Longer/Questions come.ogg",
           "hashSelectedLocal": "l1_NSBtaW4gVEMgTXVzaWMvUXVlc3Rpb25zIGNvbWUub2dn",
           "whatSelectedRemote": "",
@@ -613,7 +613,7 @@
           "mime": "directory",
           "how": "seq",
           "volume": 79,
-          "howLong": "0"
+          "howLong": "180"
         },
         {
           "time": "08 : 00 : PM",
@@ -636,7 +636,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -645,7 +645,7 @@
           "mime": "directory",
           "how": "rand",
           "volume": 80,
-          "howLong": "Full"
+          "howLong": "90"
         },
         {
           "time": "10 : 00 : PM",
@@ -738,7 +738,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -747,7 +747,7 @@
           "mime": "directory",
           "how": "rand",
           "volume": 80,
-          "howLong": "Full"
+          "howLong": "90"
         },
         {
           "time": "09 : 00 : AM",
@@ -770,7 +770,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 World of Angels Track 09_90sec.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIFdvcmxkIG9mIEFuZ2VscyBUcmFjayAwOV85MHNlYy53YXYubXAz",
           "recentLocal": [
@@ -782,7 +782,7 @@
           "mime": "directory",
           "how": "rand",
           "volume": 80,
-          "howLong": "Full"
+          "howLong": "90"
         },
         {
           "time": "10 : 30 : AM",
@@ -853,7 +853,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -862,7 +862,7 @@
           "mime": "directory",
           "how": "rand",
           "volume": 80,
-          "howLong": "Full"
+          "howLong": "90"
         },
         {
           "time": "03 : 00 : PM",
@@ -885,7 +885,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -894,7 +894,7 @@
           "mime": "directory",
           "how": "rand",
           "volume": 80,
-          "howLong": "Full"
+          "howLong": "90"
         },
         {
           "time": "05 : 00 : PM",
@@ -933,7 +933,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -942,7 +942,7 @@
           "mime": "directory",
           "how": "rand",
           "volume": 80,
-          "howLong": "Full"
+          "howLong": "90"
         },
         {
           "time": "07 : 00 : PM",
@@ -981,7 +981,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/Can you see.ogg",
           "hashSelectedLocal": "l1_NSBtaW4gVEMgTXVzaWMvQ2FuIHlvdSBzZWUub2dn",
           "whatSelectedRemote": "",
@@ -990,7 +990,7 @@
           "mime": "directory",
           "how": "rand",
           "volume": 80,
-          "howLong": "Full"
+          "howLong": "90"
         },
         {
           "time": "09 : 00 : PM",
@@ -1013,7 +1013,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -1022,7 +1022,7 @@
           "mime": "directory",
           "how": "rand",
           "volume": 80,
-          "howLong": "Full"
+          "howLong": "90"
         }
       ],
       "name": "Traditional",
@@ -1035,7 +1035,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -1067,7 +1067,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -1099,7 +1099,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -1131,7 +1131,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -1163,7 +1163,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -1195,7 +1195,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -1227,7 +1227,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
@@ -1259,7 +1259,7 @@
           "exception": "every",
           "week": "all",
           "day": "day",
-          "what": "Hourly",
+          "what": "5 min TC Music",
           "whatSelectedLocal": "Hourly/00 As we were-Angel 's touch _1.30.wav.mp3",
           "hashSelectedLocal": "l1_SG91cmx5LzAwIEFzIHdlIHdlcmUtQW5nZWwgJ3MgdG91Y2ggXzEuMzAud2F2Lm1wMw",
           "whatSelectedRemote": "",
