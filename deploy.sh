@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Override via environment if deploying a fork/branch:
 #   TC_REPO_URL=... TC_BRANCH=... sudo -E bash deploy.sh
 REPO_URL="${TC_REPO_URL:-https://github.com/BKWSU-UK/tc-server.git}"
-BRANCH="${TC_BRANCH:-Alpine-based}"
+BRANCH="${TC_BRANCH:-main}"
 
 # Detect OS (Alpine/Debian) and load per-distro paths, users and helpers.
 # shellcheck source=scripts/os-detect.sh
