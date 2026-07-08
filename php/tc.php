@@ -34,7 +34,7 @@
                 foreach ($playList->lastPlay as $j => $lastPlayHash) {
                       if (isset($newStore->list[$i])) {
                     if(property_exists($lastPlayHash, 'hashSelectedRemote')) {
-                          if (!isset($newStore->list[$i]->lastPlay)) {
+                          if (!isset($newStore->list[$i]->lastPlay) || !is_object($newStore->list[$i]->lastPlay)) {
                             $newStore->list[$i]->lastPlay = new stdClass();
                           }
                           if (!isset($newStore->list[$i]->lastPlay->{$j})) {
@@ -43,7 +43,7 @@
                           $newStore->list[$i]->lastPlay->{$j}->hashSelectedRemote = $lastPlayHash->hashSelectedRemote;
                     }
                     if(property_exists($lastPlayHash, 'recentRemote')) {
-                          if (!isset($newStore->list[$i]->lastPlay)) {
+                          if (!isset($newStore->list[$i]->lastPlay) || !is_object($newStore->list[$i]->lastPlay)) {
                             $newStore->list[$i]->lastPlay = new stdClass();
                           }
                           if (!isset($newStore->list[$i]->lastPlay->{$j})) {
