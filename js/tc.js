@@ -1268,28 +1268,29 @@ const TC = (() => {
     }
     if (TC.system && TC.systemPreview && previewCall) {
       console.log('Playing on system: ' + (entry.whatSelectedRemote || entry.what) + ' at volume ' + compositeVolume + '%');
+      // For directory entries, advance the server-side selection before playing
+      if (entry.mime === 'directory') {
+        $.ajax({ url: 'php/tc.php?action=directorySelect&index=' + TC.playerIndex,
+          async: false,
+          error: function (xhr) {
+            console.error('Failed to advance remote directory selection: ' + xhr.status + ': ' + xhr.responseText);
+          }
+        });
+      }
       $.ajax({ url: 'php/tc.php?action=play&index=' + TC.playerIndex,
         error: function (xhr) {
           console.error(xhr.status + ': ' + xhr.responseText)
         }
-      });    
+      });
     }
     
-    //Choose next track
+    //Choose next track for local preview
     if (entry.mime === 'directory') {
       $.ajax({ url: 'php/tc.php?action=listFiles&phash=' + encodeURIComponent(entry.hash),
         dataType: 'json'
       }).done(function (data) {
         TC.directorySelect(entry.hash, data);
         TC.storeAll(false);
-        // In System mode preview, also advance the server-side remote selection
-        if (TC.system && TC.systemPreview && previewCall) {
-          $.ajax({ url: 'php/tc.php?action=directorySelect&index=' + TC.playerIndex,
-            error: function (xhr) {
-              console.error('Failed to advance remote directory selection: ' + xhr.status + ': ' + xhr.responseText);
-            }
-          });
-        }
       }).fail(function (xhr) {
         console.error(xhr.status + ': ' + xhr.responseText);
       });
