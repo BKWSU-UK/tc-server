@@ -370,7 +370,7 @@ body {
 }
 
 .playlist-item.now-playing {
-  background-color: #43ff64 !important;
+  background-color: #70e764 !important;
   border-left: 4px solid var(--success-color);
   box-shadow: 0 0 0 2px var(--success-color);
 }
