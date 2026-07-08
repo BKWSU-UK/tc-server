@@ -1026,13 +1026,26 @@ function calculateBankHolidays($yr) {
       clearNowPlaying();
       return ['playing' => false];
     }
-    exec('ps aux | grep -F -v grep | grep -F -- "-x ' . $data['xid'] . '"', $psOut);
-    if (empty($psOut)) {
-      clearNowPlaying();
-      return ['playing' => false];
-    }
     $howLong = $data['howLong'];
     $elapsed = time() - $data['startTime'];
+
+    if ($data['chimeGapScheduled'] ?? false) {
+      // The start-chime mplayer process exits almost immediately; the actual wait
+      // + end-chime playback happens in a separate detached shell script that we
+      // can't track by PID, so fall back to elapsed-time tracking for the whole
+      // gap plus the (approximate) end chime length.
+      $totalDuration = $howLong + ($data['chimeEndDuration'] ?? 3);
+      if ($elapsed >= $totalDuration) {
+        clearNowPlaying();
+        return ['playing' => false];
+      }
+    } else {
+      exec('ps aux | grep -F -v grep | grep -F -- "-x ' . $data['xid'] . '"', $psOut);
+      if (empty($psOut)) {
+        clearNowPlaying();
+        return ['playing' => false];
+      }
+    }
     return [
       'playing' => true,
       'what' => $data['what'],
@@ -1102,13 +1115,19 @@ function calculateBankHolidays($yr) {
     $displayName = ($entry->mime === 'audio/chime') ? 'Chime' : basename($entry->whatSelectedRemote);
     $howLongNum = (property_exists($entry, 'howLong') && (intval($entry->howLong) > 0)) ? intval($entry->howLong) : null;
     $duration = $howLongNum ?? getTrackDuration(PLAYLISTDIR . '/' . $entry->whatSelectedRemote);
+    // When a Chime entry has an explicit duration, setPlayerVolumeAndLength() schedules the
+    // wait + end-chime playback in a separate detached shell script (not this mplayer process),
+    // so getNowPlayingStatus() can't rely on this $rawXid staying alive for the whole duration.
+    $chimeGapScheduled = $chime && ($howLongNum !== null);
     writeNowPlaying([
       'what' => $displayName,
       'startTime' => time(),
       'howLong' => $duration,
       'volume' => $result['volume'],
       'index' => $index,
-      'xid' => $rawXid
+      'xid' => $rawXid,
+      'chimeGapScheduled' => $chimeGapScheduled,
+      'chimeEndDuration' => $chimeGapScheduled ? (getTrackDuration(PLAYLISTDIR . '/' . CHIME_END) ?? 3) : null
     ]);
 
     if ($entry->mime === 'directory') {
