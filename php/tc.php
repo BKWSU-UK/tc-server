@@ -153,6 +153,11 @@
         checkDependencies();
         stopPlayer();
         break;
+      #Poll what is currently playing on the system (server-side) player
+      case 'nowPlaying':
+            header('Content-Type: application/json');
+            echo json_encode(getNowPlayingStatus());
+        break;
       case 'next':
         if (!clientInSameSubnet()) {
           http_response_code(403);
@@ -262,6 +267,7 @@
             if (file_exists(PERSISTENTFILE)) unlink(PERSISTENTFILE);
             if (file_exists(PLAYLOG)) unlink(PLAYLOG);
             if (file_exists(DEBUGLOG)) unlink(DEBUGLOG);
+            clearNowPlaying();
             $tc->releaseLock('factoryreset');
         die('Factory reset done');
         break;

@@ -7,6 +7,7 @@
   define ( 'PERSISTENTFILEDEFAULT', SYSTEMDIR . '/' . 'playListDbDefault.JSON');
   define ( 'PERSISTENTLOCK', SYSTEMDIR . '/' . 'playListDb.lock');
   define ( 'PLAYLOG', SYSTEMDIR . '/' . 'played.log');
+  define ( 'NOWPLAYINGFILE', SYSTEMDIR . '/' . 'nowPlaying.JSON');
   define ( 'DEBUGLOG', SYSTEMDIR . '/' . 'debug.log');
   define ( 'FADEDEBUGLOG', SYSTEMDIR . '/' . 'debug_fade.log');
   define ( 'DEBUG', file_exists ( SYSTEMDIR . '/' . 'debug' ));
@@ -990,6 +991,60 @@ function calculateBankHolidays($yr) {
     $dirPlayed->hashSelectedRemote = $entry->hashSelectedRemote;
   }
 
+  // Query the real duration (seconds) of a media file via mplayer -identify.
+  // Used when an entry has no explicit howLong (i.e. "Full"/"0" - plays to the
+  // natural end of the file) so the "now playing" UI can still show an accurate
+  // countdown. Returns null if the duration could not be determined.
+  function getTrackDuration($filePath) {
+    $escapedPath = escapeshellarg($filePath);
+    $output = exec("mplayer -identify -frames 0 -vo null -ao null $escapedPath 2>/dev/null | grep -m1 -oP 'ID_LENGTH=\K[0-9.]+'");
+    if (is_numeric($output)) {
+      return (int) round((float)$output);
+    }
+    return null;
+  }
+
+  // Persist state describing what is currently playing in system mode, so the
+  // web UI can poll for it (php/tc.php?action=nowPlaying) and show a "now
+  // playing" indicator/countdown similar to local (browser) mode.
+  function writeNowPlaying($data) {
+    file_put_contents(NOWPLAYINGFILE, json_encode($data));
+  }
+
+  function clearNowPlaying() {
+    if (file_exists(NOWPLAYINGFILE)) {
+      unlink(NOWPLAYINGFILE);
+    }
+  }
+
+  function getNowPlayingStatus() {
+    if (!file_exists(NOWPLAYINGFILE)) {
+      return ['playing' => false];
+    }
+    $data = json_decode(file_get_contents(NOWPLAYINGFILE), true);
+    if (!is_array($data) || !isset($data['xid']) || !ctype_digit((string)$data['xid'])) {
+      clearNowPlaying();
+      return ['playing' => false];
+    }
+    exec('ps aux | grep -F -v grep | grep -F -- "-x ' . $data['xid'] . '"', $psOut);
+    if (empty($psOut)) {
+      clearNowPlaying();
+      return ['playing' => false];
+    }
+    $howLong = $data['howLong'];
+    $elapsed = time() - $data['startTime'];
+    return [
+      'playing' => true,
+      'what' => $data['what'],
+      'startTime' => $data['startTime'],
+      'howLong' => $howLong,
+      'elapsed' => $elapsed,
+      'remaining' => ($howLong !== null) ? max(0, $howLong - $elapsed) : null,
+      'volume' => $data['volume'],
+      'index' => $data['index']
+    ];
+  }
+
   function playEntry ($index) {
     global $stored, $tc;
     $played = 'nothing';
@@ -1043,6 +1098,19 @@ function calculateBankHolidays($yr) {
     debugLog($mplayerCmd);
     $played = $entry->whatSelectedRemote;
 
+    $rawXid = explode("-", "$id")[1];
+    $displayName = ($entry->mime === 'audio/chime') ? 'Chime' : basename($entry->whatSelectedRemote);
+    $howLongNum = (property_exists($entry, 'howLong') && (intval($entry->howLong) > 0)) ? intval($entry->howLong) : null;
+    $duration = $howLongNum ?? getTrackDuration(PLAYLISTDIR . '/' . $entry->whatSelectedRemote);
+    writeNowPlaying([
+      'what' => $displayName,
+      'startTime' => time(),
+      'howLong' => $duration,
+      'volume' => $result['volume'],
+      'index' => $index,
+      'xid' => $rawXid
+    ]);
+
     if ($entry->mime === 'directory') {
       //Selection for next time
       directorySelect($index);
@@ -1066,6 +1134,7 @@ function calculateBankHolidays($yr) {
         exec('amixer ' . $devCardInfo . (($isMapped)?' -M set "' . $controlId . '" -- ' . voltoDb($initialLevel) . 'dB':' cset "' . $controlId . '" ' . $initialLevel));
       }
     }
+    clearNowPlaying();
   }
 
   function checkOsCommands () {

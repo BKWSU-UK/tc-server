@@ -1214,6 +1214,8 @@ const TC = (() => {
       
       console.log('Playing locally: ' + source + ' at volume ' + compositeVolume + '% for ' + entry.howLong + ' seconds');
       
+      $('#systemProgressContainer').hide();
+      player.show();
       TC.playEngine(player, source, compositeVolume);
       TC.howLong();
       $( '#nowPlayingTag' ).empty().append( source );
@@ -1252,6 +1254,48 @@ const TC = (() => {
     } else {
       player[0].pause();
     }
+  }
+
+  //Format a countdown in seconds as m:ss
+  TC.formatRemaining = function (seconds) {
+    seconds = Math.max(0, Math.round(seconds));
+    const m = Math.floor(seconds / 60), s = seconds % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  //Poll the server for what is currently playing in system mode (hardware playback),
+  //mirroring the "now playing" indicator shown for local (browser) playback.
+  TC.pollNowPlaying = function () {
+    if (!TC.system || !TC.lan || !TC.serverAvailable) {
+      return;
+    }
+    $.ajax({ url: 'php/tc.php?action=nowPlaying', dataType: 'json', timeout: 3000 })
+      .done(function (data) {
+        if (data && data.playing) {
+          $('#audioPlayer').hide();
+          $('#systemProgressContainer').show();
+          if (TC.hidePlayerTimeout) {
+            clearTimeout(TC.hidePlayerTimeout);
+          }
+          $('#audioPlayerDiv').show();
+          $('#nowPlayingTag').empty().append(data.what);
+          if (data.howLong !== null && data.howLong > 0) {
+            const pct = Math.max(0, Math.min(100, 100 * data.elapsed / data.howLong));
+            $('#systemProgressBar').css('width', pct + '%');
+            $('#systemRemainingTag').text(TC.formatRemaining(data.remaining) + ' remaining');
+          } else {
+            $('#systemProgressBar').css('width', '100%');
+            $('#systemRemainingTag').text('Playing...');
+          }
+        } else {
+          $('#audioPlayer').show();
+          $('#systemProgressContainer').hide();
+          $('#audioPlayerDiv').fadeOut(200);
+        }
+      })
+      .fail(function () {
+        //Silently ignore transient polling failures
+      });
   }
 
   TC.sortCompareTime = function (a, b) {
@@ -1503,6 +1547,7 @@ const TC = (() => {
     TC.bindPlayListInput();
     TC.attachItemEventHandlers();
     TC.eventClock();
+    setInterval(TC.pollNowPlaying, 2000);
     TC.loaded = true;
     
     if (TC.lan) {
