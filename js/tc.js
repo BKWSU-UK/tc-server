@@ -1154,14 +1154,23 @@ const TC = (() => {
       if (val < 1 && cleanValue.length > 0) val = 1;
       $field.val(val);
     } else {
-      // Allow 0-59, pad with leading zero when 2 digits
+      // Allow 0-59, don't pad during typing
       if (cleanValue === '') {
         $field.val('');
         return;
       }
       let val = parseInt(cleanValue);
       if (val > 59) val = 59;
-      $field.val(String(val).padStart(2, '0'));
+      $field.val(val);
+    }
+  };
+
+  TC.formatTimeField = function (field) {
+    const $field = $('#tp' + field);
+    let val = $field.val();
+    if (val === '') return;
+    if (field === 'Minute') {
+      $field.val(String(parseInt(val)).padStart(2, '0'));
     }
   };
 
