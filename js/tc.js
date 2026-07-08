@@ -1124,7 +1124,7 @@ const TC = (() => {
   TC.adjustTime = function (field, delta) {
     const $field = $('#tp' + field);
     let val = parseInt($field.val());
-    
+
     if (field === 'Hour') {
       val += delta;
       if (val > 12) val = 1;
@@ -1134,6 +1134,33 @@ const TC = (() => {
       val += delta;
       if (val >= 60) val = 0;
       if (val < 0) val = 59;
+      $field.val(String(val).padStart(2, '0'));
+    }
+  };
+
+  TC.validateTimeInput = function (field, value) {
+    const $field = $('#tp' + field);
+    // Remove non-digit characters
+    let cleanValue = value.replace(/\D/g, '');
+
+    if (field === 'Hour') {
+      // Allow 1-12, empty string while typing
+      if (cleanValue === '') {
+        $field.val('');
+        return;
+      }
+      let val = parseInt(cleanValue);
+      if (val > 12) val = 12;
+      if (val < 1 && cleanValue.length > 0) val = 1;
+      $field.val(val);
+    } else {
+      // Allow 0-59, pad with leading zero when 2 digits
+      if (cleanValue === '') {
+        $field.val('');
+        return;
+      }
+      let val = parseInt(cleanValue);
+      if (val > 59) val = 59;
       $field.val(String(val).padStart(2, '0'));
     }
   };
