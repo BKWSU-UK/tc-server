@@ -26,6 +26,7 @@ const TC = (() => {
   TC.lastTimeLoop = (new Date()).getTime();
   TC.nowPlayingIndex = -1;
   TC.chimeWaiting = false;
+  TC.localPlaybackActive = false;
     
   //Highlight the playlist row currently being played (bright green), independent
   //of row selection (table-info) or the "next up" indicator (table-success).
@@ -1259,6 +1260,7 @@ const TC = (() => {
       
       $('#systemProgressContainer').hide();
       player.show();
+      TC.localPlaybackActive = true;
       TC.playEngine(player, source, compositeVolume);
       TC.howLong();
       $( '#nowPlayingTag' ).empty().append( source );
@@ -1308,6 +1310,7 @@ const TC = (() => {
         }
         $('#audioPlayerDiv').fadeOut(200);
         TC.setNowPlayingRow(-1);
+        TC.localPlaybackActive = false;
       } else {
         player[0].pause();
       }
@@ -1324,7 +1327,7 @@ const TC = (() => {
   //Poll the server for what is currently playing in system mode (hardware playback),
   //mirroring the "now playing" indicator shown for local (browser) playback.
   TC.pollNowPlaying = function () {
-    if (!TC.system || !TC.lan || !TC.serverAvailable) {
+    if (!TC.system || !TC.lan || !TC.serverAvailable || TC.localPlaybackActive) {
       return;
     }
     $.ajax({ url: 'php/tc.php?action=nowPlaying', dataType: 'json', timeout: 3000 })
@@ -1660,6 +1663,7 @@ const TC = (() => {
       TC.hidePlayerTimeout = setTimeout(function() {
         $('#audioPlayerDiv').fadeOut(200);
         TC.setNowPlayingRow(-1);
+        TC.localPlaybackActive = false;
       }, 3000);
     });
     $('#audioPlayer').on('play', function(){
