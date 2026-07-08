@@ -129,7 +129,12 @@
             <!-- Audio player card -->
             <div id="audioPlayerDiv" class="card shadow-sm border-0 bg-primary text-white mb-4" style="display:none;">
               <div class="card-body p-3 text-center">
-                <div id="nowPlayingTag" class="small mb-2 fw-bold text-truncate"></div>
+                <div class="d-flex align-items-center justify-content-center gap-2 mb-2">
+                  <div id="nowPlayingTag" class="small fw-bold text-truncate"></div>
+                  <button type="button" id="nowPlayingStopButton" class="btn btn-sm btn-light py-0 px-2" title="Stop" onclick="TC.stopNowPlaying();">
+                    <i class="bi bi-stop-circle-fill"></i>
+                  </button>
+                </div>
                 <audio id="audioPlayer" class="w-100" controls playStamp="init">
                   An html5-capable browser is required.
                 </audio>

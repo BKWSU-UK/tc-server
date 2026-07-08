@@ -24,7 +24,23 @@ const TC = (() => {
   TC.nextEventTime = -1;
   TC.forceRemoteSave = false;
   TC.lastTimeLoop = (new Date()).getTime();
+  TC.nowPlayingIndex = -1;
+  TC.chimeWaiting = false;
     
+  //Highlight the playlist row currently being played (bright green), independent
+  //of row selection (table-info) or the "next up" indicator (table-success).
+  TC.applyNowPlayingHighlight = function () {
+    $('.playlist-item.now-playing').removeClass('now-playing');
+    if (TC.nowPlayingIndex >= 0) {
+      $('#tableRow' + (TC.nowPlayingIndex + 1)).addClass('now-playing');
+    }
+  }
+
+  TC.setNowPlayingRow = function (index) {
+    TC.nowPlayingIndex = index;
+    TC.applyNowPlayingHighlight();
+  }
+
   //Action when a row is clicked
   TC.rowClick = function (i) {
     if (TC.selectedRow > 0) {
@@ -248,6 +264,7 @@ const TC = (() => {
     const scrollPos = $('#playListTableDiv').scrollTop();
     $('#playList').empty().append(TC.renderPlaylistItems());
     $('#playListTableDiv').scrollTop(scrollPos);
+    TC.applyNowPlayingHighlight();
     $('[data-bs-toggle="tooltip"]').tooltip();
     $('#playListForm').off('propertychange change keyup paste input')
       .on('propertychange change keyup paste input', function (event) {
@@ -1154,13 +1171,39 @@ const TC = (() => {
     const entry = TC.stored.list[TC.stored.selectedPlayList].list[TC.playerIndex];
     const player = $('#audioPlayer');
     const stamp = Date.now().toString();
+    const isChime = entry.what.toLowerCase() === 'chime';
+    const howLongSec = parseInt(entry.howLong);
     
     //Plan fade out event after howLong seconds
     player.attr('playStamp', stamp);
-    if (parseInt(entry.howLong)) {
+    if (howLongSec) {
+      if (isChime) {
+        //Between chime start and chime end there is no audio playing, so show
+        //a countdown of time remaining in the "now playing" box instead.
+        const chimeStart = Date.now();
+        TC.chimeWaiting = true;
+        if (TC.chimeCountdownInterval) {
+          clearInterval(TC.chimeCountdownInterval);
+        }
+        TC.chimeCountdownInterval = setInterval(function () {
+          if (!TC.chimeWaiting) {
+            clearInterval(TC.chimeCountdownInterval);
+            return;
+          }
+          const elapsed = (Date.now() - chimeStart) / 1000;
+          const remaining = Math.max(0, howLongSec - elapsed);
+          const pct = Math.max(0, Math.min(100, 100 * elapsed / howLongSec));
+          $('#systemProgressBar').css('width', pct + '%');
+          $('#systemRemainingTag').text(TC.formatRemaining(remaining) + ' remaining');
+        }, 500);
+      }
       setTimeout(function () {
-        if (entry.what.toLowerCase() === 'chime') {
+        if (isChime) {
           //Special case for Chime, we must now play the end chime.
+          clearInterval(TC.chimeCountdownInterval);
+          TC.chimeWaiting = false;
+          player.show();
+          $('#systemProgressContainer').hide();
           let compositeVolume = TC.compositeVolume(), source = '.system/Chime_end.flac';
           TC.playEngine(player, source, compositeVolume);
         } else {
@@ -1176,7 +1219,7 @@ const TC = (() => {
             }, TC.fadeTime + 100);
           }
         }
-      }, entry.howLong * 1000);
+      }, howLongSec * 1000);
     } 
   }
   
@@ -1219,6 +1262,7 @@ const TC = (() => {
       TC.playEngine(player, source, compositeVolume);
       TC.howLong();
       $( '#nowPlayingTag' ).empty().append( source );
+      TC.setNowPlayingRow(TC.playerIndex);
     }
     if (TC.system && TC.systemPreview && previewCall) {
       console.log('Playing on system: ' + (entry.whatSelectedRemote || entry.what) + ' at volume ' + compositeVolume + '%');
@@ -1252,7 +1296,21 @@ const TC = (() => {
         }
       });
     } else {
-      player[0].pause();
+      if (TC.chimeWaiting) {
+        //Stop mid-way through a chime's silent gap - there is no audio element
+        //to pause, so tear down the countdown/highlight manually.
+        TC.chimeWaiting = false;
+        clearInterval(TC.chimeCountdownInterval);
+        $('#systemProgressContainer').hide();
+        player.show();
+        if (TC.hidePlayerTimeout) {
+          clearTimeout(TC.hidePlayerTimeout);
+        }
+        $('#audioPlayerDiv').fadeOut(200);
+        TC.setNowPlayingRow(-1);
+      } else {
+        player[0].pause();
+      }
     }
   }
 
@@ -1287,15 +1345,34 @@ const TC = (() => {
             $('#systemProgressBar').css('width', '100%');
             $('#systemRemainingTag').text('Playing...');
           }
+          TC.setNowPlayingRow(data.index);
         } else {
           $('#audioPlayer').show();
           $('#systemProgressContainer').hide();
           $('#audioPlayerDiv').fadeOut(200);
+          TC.setNowPlayingRow(-1);
         }
       })
       .fail(function () {
         //Silently ignore transient polling failures
       });
+  }
+
+  //Stop whatever the "now playing" box is currently showing - system (hardware)
+  //playback or local (browser) playback - regardless of how it was started.
+  TC.stopNowPlaying = function () {
+    if (TC.system) {
+      $.ajax({ url: 'php/tc.php?action=stop',
+        error: function (xhr) {
+          console.error(xhr.status + ': ' + xhr.responseText)
+        }
+      });
+    }
+    if (TC.chimeWaiting) {
+      TC.stop(TC.playerIndex + 1);
+    } else {
+      $('#audioPlayer')[0].pause();
+    }
   }
 
   TC.sortCompareTime = function (a, b) {
@@ -1569,12 +1646,20 @@ const TC = (() => {
     //Bind to audio player events
     $('#audioPlayerDiv').hide();
     $('#audioPlayer').on('pause ended', function(){
-      //Clear the player 10 seconds from now
       if (TC.hidePlayerTimeout) {
         clearTimeout(TC.hidePlayerTimeout);
       }
+      if (TC.chimeWaiting) {
+        //Between chime start and chime end there is no audio playing - keep the
+        //now playing box open showing a countdown instead of hiding it.
+        $('#audioPlayer').hide();
+        $('#systemProgressContainer').show();
+        return;
+      }
+      //Clear the player 3 seconds from now
       TC.hidePlayerTimeout = setTimeout(function() {
         $('#audioPlayerDiv').fadeOut(200);
+        TC.setNowPlayingRow(-1);
       }, 3000);
     });
     $('#audioPlayer').on('play', function(){
