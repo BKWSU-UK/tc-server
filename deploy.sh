@@ -193,7 +193,8 @@ if [ "$TC_OS" = "alpine" ]; then
     $SUDO rc-update add "php-fpm${TC_PHP_NODOT}" default 2>/dev/null || \
         $SUDO rc-update add php-fpm default 2>/dev/null || true
     $SUDO rc-update add nginx default 2>/dev/null || true
-    $SUDO rc-update add crond default 2>/dev/null || true
+    $SUDO rc-update add crond default 2>/dev/null || \
+        $SUDO rc-update add dcron default 2>/dev/null || true
     $SUDO rc-service "php-fpm${TC_PHP_NODOT}" restart 2>/dev/null || \
         $SUDO rc-service php-fpm restart 2>/dev/null || true
     $SUDO rc-service nginx restart
