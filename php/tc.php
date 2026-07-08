@@ -113,6 +113,21 @@
             header('Content-Type: application/json');
             echo json_encode(listFiles ($phash), JSON_PRETTY_PRINT);
         break;
+      #Advance directory selection for sequential/random playback
+      case 'directorySelect':
+            if (!clientInSameSubnet()) {
+              http_response_code(403);
+              die('Cannot advance directory selection from WAN');
+            }
+            if (isset($_REQUEST['index'])) {
+              $index = (int)$_REQUEST['index'];
+              $tc->getLock('directorySelect');
+              $tc->loadStored();
+              directorySelect($index);
+              $tc->saveStored();
+              $tc->releaseLock('directorySelect');
+            }
+            break;
       #Play a song
       case 'play':
         if (!clientInSameSubnet()) {

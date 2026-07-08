@@ -1282,6 +1282,14 @@ const TC = (() => {
       }).done(function (data) {
         TC.directorySelect(entry.hash, data);
         TC.storeAll(false);
+        // In System mode preview, also advance the server-side remote selection
+        if (TC.system && TC.systemPreview && previewCall) {
+          $.ajax({ url: 'php/tc.php?action=directorySelect&index=' + TC.playerIndex,
+            error: function (xhr) {
+              console.error('Failed to advance remote directory selection: ' + xhr.status + ': ' + xhr.responseText);
+            }
+          });
+        }
       }).fail(function (xhr) {
         console.error(xhr.status + ': ' + xhr.responseText);
       });
