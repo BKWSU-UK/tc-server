@@ -49,6 +49,12 @@ Traffic Control can run as a Home Assistant add-on, which handles all dependenci
     sudo bash deploy.sh
     ```
 
+    On Alpine (no sudo by default), run as root:
+    ```bash
+    su -
+    bash deploy.sh
+    ```
+
     Or set up manually:
 
     **Debian/Ubuntu/Raspberry Pi OS:**
@@ -61,12 +67,14 @@ Traffic Control can run as a Home Assistant add-on, which handles all dependenci
     ```
 
     **Alpine (including Alpine on Raspberry Pi):**
+    Alpine minimal does not include sudo by default. Run as root:
     ```bash
+    su -
     cd /var/www/html/trafficcontrol
     mkdir .tcsys
-    sudo chown -R www-data:www-data .tcsys Music
-    sudo chmod -R 775 .tcsys Music
-    sudo apk add mplayer alsa-utils bc coreutils grep procps bash util-linux
+    chown -R www-data:www-data .tcsys Music
+    chmod -R 775 .tcsys Music
+    apk add mplayer alsa-utils bc coreutils grep procps bash util-linux
     ```
 
 3.  **Configure the cron job** (if not using `deploy.sh`):
@@ -81,8 +89,9 @@ Traffic Control can run as a Home Assistant add-on, which handles all dependenci
     ```
 
     **Alpine (including Alpine on Raspberry Pi):**
+    Run as root:
     ```bash
-    sudo crontab -u www-data -e
+    crontab -u www-data -e
     ```
     Add (BusyBox crond format, no user field):
     ```cron
@@ -101,15 +110,15 @@ Alpine on Raspberry Pi typically runs in diskless mode where the root filesystem
 1. **Prepare persistent storage** (USB drive, SD card partition, or network mount):
    ```bash
    # Mount your storage (example for USB drive)
-   sudo mkdir -p /mnt/data
-   sudo mount /dev/sdX1 /mnt/data
+   mkdir -p /mnt/data
+   mount /dev/sdX1 /mnt/data
    # Add to /etc/fstab for automatic mounting on boot
-   echo "/dev/sdX1 /mnt/data ext4 defaults 0 0" | sudo tee -a /etc/fstab
+   echo "/dev/sdX1 /mnt/data ext4 defaults 0 0" >> /etc/fstab
    ```
 
 2. **Run deploy.sh with persistent storage location:**
    ```bash
-   TC_DATA_DIR=/mnt/data sudo -E bash deploy.sh
+   TC_DATA_DIR=/mnt/data bash deploy.sh
    ```
 
    The script will:
@@ -120,7 +129,7 @@ Alpine on Raspberry Pi typically runs in diskless mode where the root filesystem
 
    Alternatively, let the script auto-detect common locations:
    ```bash
-   sudo bash deploy.sh
+   bash deploy.sh
    ```
    It will check `/mnt/data`, `/media/usb`, and `/srv/data` automatically.
 
