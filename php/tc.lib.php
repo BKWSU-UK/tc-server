@@ -1052,7 +1052,7 @@ function calculateBankHolidays($yr) {
         return ['playing' => false];
       }
     }
-    $nullAudio = file_exists('/.dockerenv');
+    $nullAudio = (getCardNum() === -1);
     return [
       'playing' => true,
       'what' => $data['what'],
