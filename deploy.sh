@@ -325,6 +325,55 @@ else
     $SUDO systemctl restart "php${TC_PHP_DOT}-fpm"
 fi
 
+# 11. In diskless mode, persist configuration using Alpine's lbu (Local BackUp)
+if [ "$DISKLESS_MODE" = true ] && [ "$TC_OS" = "alpine" ]; then
+    echo "Persisting configuration for diskless mode using lbu..."
+    # Persist installed packages (apk cache)
+    $SUDO lbu include /etc/apk/world
+    $SUDO lbu include /etc/apk/repositories
+
+    # Persist nginx configuration
+    $SUDO lbu include /etc/nginx
+    $SUDO lbu include /etc/nginx/http.d
+
+    # Persist php-fpm configuration
+    $SUDO lbu include /etc/php${TC_PHP_DOT}
+    $SUDO lbu include /etc/php${TC_PHP_NODOT}
+
+    # Persist cron configuration
+    $SUDO lbu include /etc/crontabs
+
+    # Persist hosts file (for trafficcontrol.local)
+    $SUDO lbu include /etc/hosts
+
+    # Persist fstab (for persistent storage mount)
+    $SUDO lbu include /etc/fstab
+
+    # Persist OpenRC runlevel configuration (service enablements)
+    $SUDO lbu include /etc/runlevels
+
+    # Persist the symlink from /var/www/html/trafficcontrol to persistent storage
+    # We need to recreate the symlink on boot since /var/www/html is in RAM
+    # Add a local boot script to recreate the symlink
+    $SUDO tee /etc/local.d/trafficcontrol.mount > /dev/null << EOF
+#!/bin/sh
+# Recreate symlink to persistent storage on boot
+if [ -d "$DATA_DIR/trafficcontrol" ]; then
+    mkdir -p /var/www/html
+    rm -f /var/www/html/trafficcontrol
+    ln -sf "$DATA_DIR/trafficcontrol" /var/www/html/trafficcontrol
+    echo "Recreated symlink: /var/www/html/trafficcontrol -> $DATA_DIR/trafficcontrol"
+fi
+EOF
+    $SUDO chmod +x /etc/local.d/trafficcontrol.mount
+    $SUDO lbu include /etc/local.d
+
+    # Commit all changes to the overlay
+    echo "Committing changes to overlay..."
+    $SUDO lbu commit
+    echo "Configuration persisted. Changes will survive reboots."
+fi
+
 echo ""
 echo "Deployment complete."
 echo ""
