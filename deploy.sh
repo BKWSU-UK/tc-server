@@ -52,7 +52,8 @@ if [ "$TC_OS" = "alpine" ]; then
     # Enable community repository for PHP and other packages
     if ! grep -q "^http.*community" /etc/apk/repositories; then
         echo "Enabling Alpine community repository..."
-        $SUDO sed -i '/^http.*main/s/$/\nhttp:\/\/dl-cdn.alpinelinux.org\/alpine\/v$(cat /etc/alpine-release | cut -d. -f1,2)\/community/' /etc/apk/repositories
+        ALPINE_VER=$(cat /etc/alpine-release | cut -d. -f1,2)
+        $SUDO sh -c "echo 'http://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VER}/community' >> /etc/apk/repositories"
     fi
     $SUDO apk update
     # Pick the newest available PHP 8.x package series
