@@ -131,12 +131,33 @@ Alpine on Raspberry Pi typically runs in diskless mode where the root filesystem
 **Deployment with persistent storage:**
 
 1. **Prepare persistent storage** (USB drive, SD card partition, or network mount):
+
+   **Option A: Use existing partition**
    ```bash
    # Mount your storage (example for USB drive)
    mkdir -p /mnt/data
    mount /dev/sdX1 /mnt/data
    # Add to /etc/fstab for automatic mounting on boot
    echo "/dev/sdX1 /mnt/data ext4 defaults 0 0" >> /etc/fstab
+   ```
+
+   **Option B: Create new partition on SD card (if needed)**
+   If your SD card only has a small boot partition (e.g., 129M FAT16), create a new partition for data:
+   ```bash
+   # Create a new partition using fdisk
+   fdisk /dev/mmcblk0
+   # Press 'n' for new partition, 'p' for primary, accept defaults
+   # Press 'w' to write changes
+
+   # Format the new partition (replace mmcblk0p2 with your partition)
+   mkfs.ext4 /dev/mmcblk0p2
+
+   # Mount it
+   mkdir -p /mnt/data
+   mount /dev/mmcblk0p2 /mnt/data
+
+   # Add to /etc/fstab for automatic mounting on boot
+   echo "/dev/mmcblk0p2 /mnt/data ext4 defaults 0 0" >> /etc/fstab
    ```
 
 2. **Run deploy.sh with persistent storage location:**
