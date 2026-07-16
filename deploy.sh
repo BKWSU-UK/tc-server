@@ -328,7 +328,7 @@ fi
 # 11. In diskless mode, persist configuration using Alpine's lbu (Local BackUp)
 if [ "$DISKLESS_MODE" = true ] && [ "$TC_OS" = "alpine" ]; then
     echo "Persisting configuration for diskless mode using lbu..."
-    # Persist installed packages (apk cache)
+    # Persist installed packages list (world file and repositories)
     $SUDO lbu include /etc/apk/world
     $SUDO lbu include /etc/apk/repositories
 
@@ -355,28 +355,25 @@ if [ "$DISKLESS_MODE" = true ] && [ "$TC_OS" = "alpine" ]; then
     # Persist the symlink from /var/www/html/trafficcontrol to persistent storage
     # We need to recreate the symlink on boot since /var/www/html is in RAM
     # Create an OpenRC service to handle this on boot
-    $SUDO tee /etc/init.d/trafficcontrol-boot > /dev/null << EOF
+    cat << 'EOF' | $SUDO tee /etc/init.d/trafficcontrol-boot > /dev/null
 #!/sbin/openrc-run
 
-description="Reinstall packages and recreate symlink for diskless mode"
+description="Recreate symlink for diskless mode"
 
 depend() {
-    need net
-    after firewall
+    need localmount
+    after net
 }
 
 start() {
-    ebegin "Reinstalling packages for diskless mode"
-    apk update >/dev/null 2>&1
-    apk add --no-cache \$(cat /etc/apk/world) >/dev/null 2>&1
-    eend \$?
-
     ebegin "Recreating symlink to persistent storage"
-    if [ -d "$DATA_DIR/trafficcontrol" ]; then
+    if [ -d "/mnt/data/trafficcontrol" ]; then
         mkdir -p /var/www/html
         rm -f /var/www/html/trafficcontrol
-        ln -sf "$DATA_DIR/trafficcontrol" /var/www/html/trafficcontrol
-        einfo "Recreated symlink: /var/www/html/trafficcontrol -> $DATA_DIR/trafficcontrol"
+        ln -sf /mnt/data/trafficcontrol /var/www/html/trafficcontrol
+        einfo "Recreated symlink: /var/www/html/trafficcontrol -> /mnt/data/trafficcontrol"
+    else
+        ewarn "Persistent storage not found at /mnt/data/trafficcontrol"
     fi
     eend 0
 }
@@ -389,6 +386,13 @@ EOF
     echo "Committing changes to overlay..."
     $SUDO lbu commit
     echo "Configuration persisted. Changes will survive reboots."
+    echo ""
+    echo "IMPORTANT: In Alpine diskless mode, installed packages are in RAM and"
+    echo "will be lost on reboot. You must either:"
+    echo "  1. Re-run deploy.sh after each reboot, or"
+    echo "  2. Use a traditional Alpine installation (not diskless) for production"
+    echo ""
+    echo "The trafficcontrol-boot service will recreate the symlink on boot."
 fi
 
 echo ""
