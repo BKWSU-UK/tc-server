@@ -121,85 +121,50 @@ The script will clone the full repository to your persistent storage and create 
     * * * * * /usr/bin/php /var/www/html/trafficcontrol/php/cron.php > /dev/null 2>&1
     ```
 
+#### Alpine on Raspberry Pi
+
+**IMPORTANT:** Alpine on Raspberry Pi installs in diskless mode by default (root filesystem in RAM). For production use, **convert to a traditional installation** where the root filesystem is on persistent storage. This ensures:
+- Packages (nginx, php-fpm, etc.) persist across reboots
+- No internet connection required for boot
+- Faster boot times (no package reinstallation)
+
+**Converting Alpine from diskless to traditional installation:**
+
+1. **Install to SD card (run setup-alpine):**
+   ```bash
+   setup-alpine
+   ```
+   When prompted for installation disk, select your SD card (e.g., `/dev/mmcblk0`). This will install Alpine to disk instead of running in RAM.
+
+2. **Or manually install to disk:**
+   ```bash
+   # Install Alpine to disk (replace mmcblk0 with your device)
+   setup-disk -m sys /dev/mmcblk0
+   ```
+
+After conversion, Alpine will boot from persistent storage and you can use the regular Alpine deployment instructions below.
+
+**If you must use diskless mode** (not recommended for production):
+- Root filesystem is in RAM and changes are lost on reboot
+- Persistent storage is required for `.tcsys/` and `Music/`
+- See "Alpine on Raspberry Pi (Diskless Mode)" section below
+
 #### Alpine on Raspberry Pi (Diskless Mode)
 
-Alpine on Raspberry Pi typically runs in diskless mode where the root filesystem is in RAM (overlayfs or tmpfs). This means changes to `/var/www/html` are lost on reboot. Persistent storage is required for:
+**NOT RECOMMENDED FOR PRODUCTION:** Diskless mode runs the entire root filesystem in RAM. This requires:
+- Internet connection on every boot to reinstall packages
+- Slower boot times
+- Complex persistence configuration using `lbu`
 
-- `.tcsys/` - Runtime state (playlists, logs, locks)
-- `Music/` - Audio files
+**Only use diskless mode if you have a specific requirement for it.** Otherwise, convert to a traditional installation as described above.
 
-**Package Persistence:** The deploy.sh script uses Alpine's `lbu` (Local BackUp) system to persist installed packages (nginx, php-fpm, mplayer, etc.) and configuration files to the overlay. These will survive reboots.
+If you must use diskless mode, the deploy.sh script will:
+- Clone the repository to persistent storage (specified via `TC_DATA_DIR`)
+- Create a symlink from `/var/www/html/trafficcontrol` to persistent storage
+- Persist configuration using `lbu` (fstab, nginx config, php-fpm config, cron, hosts file)
+- Persist package binaries to overlay (nginx, php-fpm, mplayer, etc.)
 
-**Deployment with persistent storage:**
-
-1. **Prepare persistent storage** (USB drive, SD card partition, or network mount):
-
-   **Option A: Use existing partition**
-   ```bash
-   # Mount your storage (example for USB drive)
-   mkdir -p /mnt/data
-   mount /dev/sdX1 /mnt/data
-   # Add to /etc/fstab for automatic mounting on boot
-   echo "/dev/sdX1 /mnt/data ext4 defaults 0 0" >> /etc/fstab
-   ```
-
-   **Option B: Create new partition on SD card (if needed)**
-   If your SD card only has a small boot partition (e.g., 129M FAT16), create a new partition for data:
-   ```bash
-   # Install e2fsprogs for mkfs.ext4 (Alpine minimal)
-   apk add e2fsprogs
-
-   # Create a new partition using fdisk
-   fdisk /dev/mmcblk0
-   # Press 'n' for new partition, 'p' for primary, accept defaults
-   # Press 'w' to write changes
-
-   # Format the new partition (replace mmcblk0p2 with your partition)
-   mkfs.ext4 /dev/mmcblk0p2
-
-   # Mount it
-   mkdir -p /mnt/data
-   mount /dev/mmcblk0p2 /mnt/data
-
-   # Add to /etc/fstab for automatic mounting on boot
-   echo "/dev/mmcblk0p2 /mnt/data ext4 defaults 0 0" >> /etc/fstab
-
-   # IMPORTANT: In diskless mode, /etc/fstab is in RAM and will be lost on reboot.
-   # Use Alpine's lbu (Local BackUp) to persist the fstab change:
-   lbu include /etc/fstab
-   lbu commit
-   ```
-
-2. **Run deploy.sh with persistent storage location:**
-   ```bash
-   TC_DATA_DIR=/mnt/data sh deploy.sh
-   ```
-
-   The script will:
-   - Detect diskless mode automatically
-   - Clone the entire repository to persistent storage
-   - Create a symlink from `/var/www/html/trafficcontrol` to persistent storage
-   - Persist configuration and packages using Alpine's `lbu` (fstab, nginx, php-fpm, cron, hosts file, and package binaries)
-   - Create a boot service to recreate the symlink on reboot
-
-   **After reboot in diskless mode:**
-   - Packages and configuration are automatically restored from the overlay
-   - The symlink is automatically recreated by the boot service
-   - Data on persistent storage (Music, playlists) remains intact
-
-   Alternatively, let the script auto-detect common locations:
-   ```bash
-   bash deploy.sh
-   ```
-   It will check `/mnt/data`, `/media/usb`, and `/srv/data` automatically.
-
-**What gets persisted:**
-- `.tcsys/` → `$DATA_DIR/tcsys` (playlists, logs, locks, scheduler state)
-- `Music/` → `$DATA_DIR/music` (audio files)
-
-**What stays in RAM:**
-- Application code (`/var/www/html/trafficcontrol/` except the symlinks above)
-- This is safe because it's deployed from git and can be re-deployed after reboot
+**Note:** Even with package persistence, complex library dependencies may not be fully captured by `lbu`. A traditional installation is strongly recommended for production use.
 
 ## Configuration
 

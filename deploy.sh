@@ -325,9 +325,16 @@ else
     $SUDO systemctl restart "php${TC_PHP_DOT}-fpm"
 fi
 
-# 11. In diskless mode, persist configuration and packages using Alpine's lbu (Local BackUp)
+# 11. In diskless mode, persist configuration using Alpine's lbu (Local BackUp)
+# Note: For production use, convert Alpine to a traditional installation using:
+#   setup-disk -m sys /dev/mmcblk0
+# This will install Alpine to persistent storage and eliminate diskless limitations.
 if [ "$DISKLESS_MODE" = true ] && [ "$TC_OS" = "alpine" ]; then
-    echo "Persisting configuration and packages for diskless mode using lbu..."
+    echo "Persisting configuration for diskless mode using lbu..."
+    echo "WARNING: Diskless mode is not recommended for production."
+    echo "Convert to traditional installation with: setup-disk -m sys /dev/mmcblk0"
+    echo ""
+    
     # Persist installed packages list (world file and repositories)
     $SUDO lbu include /etc/apk/world
     $SUDO lbu include /etc/apk/repositories
@@ -382,25 +389,11 @@ EOF
     $SUDO rc-update add trafficcontrol-boot default
     $SUDO lbu include /etc/init.d/trafficcontrol-boot
 
-    # Persist key package directories to overlay
-    # This allows installed packages to survive reboots
-    echo "Adding package directories to overlay..."
-    $SUDO lbu include /usr/bin/nginx
-    $SUDO lbu include /usr/sbin/nginx
-    $SUDO lbu include /usr/lib/nginx
-    $SUDO lbu include /usr/share/nginx
-    $SUDO lbu include /usr/bin/php${TC_PHP_NODOT}
-    $SUDO lbu include /usr/sbin/php-fpm${TC_PHP_NODOT}
-    $SUDO lbu include /usr/lib/php${TC_PHP_NODOT}
-    $SUDO lbu include /etc/php${TC_PHP_NODOT}
-    $SUDO lbu include /usr/bin/mplayer
-    $SUDO lbu include /usr/bin/amixer
-    $SUDO lbu include /usr/bin/bc
-
     # Commit all changes to the overlay
     echo "Committing changes to overlay..."
     $SUDO lbu commit
-    echo "Configuration and packages persisted. Changes will survive reboots."
+    echo "Configuration persisted. Note: Packages may need to be reinstalled on boot."
+    echo "For production, convert to traditional installation with: setup-disk -m sys /dev/mmcblk0"
 fi
 
 echo ""
