@@ -59,17 +59,34 @@ Alpine minimal does not include sudo by default. Run as root.
 
 Alpine on Raspberry Pi installs in diskless mode by default (root filesystem in RAM). Convert to a traditional installation where the root filesystem is on persistent storage.
 
-**Recommended: Install to USB drive**
-This is the safest approach as it doesn't require repartitioning the boot SD card:
-```bash
-# Insert USB drive and identify it (e.g., /dev/sda)
-lsblk
-# Install to USB drive
-setup-disk -m sys /dev/sda
-```
+**Install to SD card (recommended):**
+Since `setup-disk` cannot repartition the currently booted disk, create a new partition first:
 
-**Alternative: Install to SD card**
-If you prefer to use the SD card, you'll need to boot from a different medium (like another SD card) to install to the target SD card, as `setup-disk` cannot repartition the currently booted disk.
+```bash
+# Install e2fsprogs for partition management
+apk add e2fsprogs
+
+# Create a new partition on the SD card
+fdisk /dev/mmcblk0
+# Press 'n' for new partition, 'p' for primary, accept defaults
+# Press 'w' to write changes
+
+# Format the new partition (replace mmcblk0p2 with your partition)
+mkfs.ext4 /dev/mmcblk0p2
+
+# Mount the partition temporarily
+mkdir -p /mnt/alpine-root
+mount /dev/mmcblk0p2 /mnt/alpine-root
+
+# Install Alpine to the mounted partition
+setup-disk -m sys /mnt/alpine-root
+
+# Add to /etc/fstab for automatic mounting
+echo "/dev/mmcblk0p2 / ext4 defaults 0 0" >> /etc/fstab
+
+# Reboot to boot from the new installation
+reboot
+```
 
 **Deployment after conversion:**
 ```bash
