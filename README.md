@@ -161,6 +161,11 @@ Alpine on Raspberry Pi typically runs in diskless mode where the root filesystem
 
    # Add to /etc/fstab for automatic mounting on boot
    echo "/dev/mmcblk0p2 /mnt/data ext4 defaults 0 0" >> /etc/fstab
+
+   # IMPORTANT: In diskless mode, /etc/fstab is in RAM and will be lost on reboot.
+   # Use Alpine's lbu (Local BackUp) to persist the fstab change:
+   lbu include /etc/fstab
+   lbu commit
    ```
 
 2. **Run deploy.sh with persistent storage location:**
