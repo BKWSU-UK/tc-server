@@ -123,17 +123,12 @@ The script will clone the full repository to your persistent storage and create 
 
 #### Alpine on Raspberry Pi (Diskless Mode)
 
-**IMPORTANT LIMITATION:** Alpine diskless mode runs the entire root filesystem in RAM (overlayfs or tmpfs). This means:
-- **Installed packages (nginx, php-fpm, etc.) are lost on reboot** and must be reinstalled
-- Configuration files are in RAM and must be persisted using `lbu`
-- Only data on mounted persistent storage (USB/SD partition) survives reboots
-
-**For production use, consider a traditional Alpine installation (not diskless) to avoid package reinstallation on every boot.**
-
-If you must use diskless mode, persistent storage is required for:
+Alpine on Raspberry Pi typically runs in diskless mode where the root filesystem is in RAM (overlayfs or tmpfs). This means changes to `/var/www/html` are lost on reboot. Persistent storage is required for:
 
 - `.tcsys/` - Runtime state (playlists, logs, locks)
 - `Music/` - Audio files
+
+**Package Persistence:** The deploy.sh script uses Alpine's `lbu` (Local BackUp) system to persist installed packages (nginx, php-fpm, mplayer, etc.) and configuration files to the overlay. These will survive reboots.
 
 **Deployment with persistent storage:**
 
@@ -184,13 +179,13 @@ If you must use diskless mode, persistent storage is required for:
    - Detect diskless mode automatically
    - Clone the entire repository to persistent storage
    - Create a symlink from `/var/www/html/trafficcontrol` to persistent storage
-   - Persist configuration using Alpine's `lbu` (fstab, nginx config, php-fpm config, cron, hosts file)
+   - Persist configuration and packages using Alpine's `lbu` (fstab, nginx, php-fpm, cron, hosts file, and package binaries)
    - Create a boot service to recreate the symlink on reboot
 
    **After reboot in diskless mode:**
-   - Run `TC_DATA_DIR=/mnt/data sh deploy.sh` to reinstall packages (nginx, php-fpm, etc.)
-   - The symlink will be automatically recreated by the boot service
-   - Data on persistent storage (Music, playlists) will remain intact
+   - Packages and configuration are automatically restored from the overlay
+   - The symlink is automatically recreated by the boot service
+   - Data on persistent storage (Music, playlists) remains intact
 
    Alternatively, let the script auto-detect common locations:
    ```bash
