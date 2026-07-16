@@ -70,7 +70,7 @@ if [ "$TC_OS" = "alpine" ]; then
     # nginx, PHP + required extensions, audio tools, and the GNU toolchain
     # (coreutils, grep w/ PCRE, procps, bash, util-linux) so exec() commands
     # behave like GNU rather than BusyBox. Note: pulseaudio-utils may
-    # not be available on all Alpine versions; use busybox crond and alsa-utils.
+    # not be available on all Alpine versions; use dcron and alsa-utils.
     # Try with optional packages first, then without if they fail.
     $SUDO apk add --no-cache \
         nginx git \
@@ -79,7 +79,7 @@ if [ "$TC_OS" = "alpine" ]; then
         "php${PHPV}-ctype" "php${PHPV}-fileinfo" \
         "php${PHPV}-phar" "php${PHPV}-openssl" \
         mplayer alsa-utils bc \
-        coreutils grep procps bash util-linux tzdata pulseaudio-utils 2>/dev/null || \
+        coreutils grep procps bash util-linux tzdata dcron pulseaudio-utils 2>/dev/null || \
     $SUDO apk add --no-cache \
         nginx git \
         "php${PHPV}" "php${PHPV}-fpm" "php${PHPV}-cli" \
@@ -87,7 +87,7 @@ if [ "$TC_OS" = "alpine" ]; then
         "php${PHPV}-ctype" "php${PHPV}-fileinfo" \
         "php${PHPV}-phar" "php${PHPV}-openssl" \
         mplayer alsa-utils bc \
-        coreutils grep procps bash util-linux tzdata
+        coreutils grep procps bash util-linux tzdata dcron
     $SUDO ln -sf "/usr/bin/php${PHPV}" /usr/bin/php
 else
     $SUDO apt update
@@ -284,11 +284,11 @@ $SUDO nginx -t
 # 8. Set up the scheduler cron job
 echo "Setting up cron job..."
 if [ "$TC_OS" = "alpine" ]; then
-    # Detect which cron daemon is installed (dcron or busybox crond)
-    if command -v crond >/dev/null 2>&1 && [ -f /sbin/crond ]; then
-        CRON_DAEMON="crond"
-    elif command -v dcron >/dev/null 2>&1; then
+    # Detect which cron daemon is installed (prefer dcron over busybox crond)
+    if command -v dcron >/dev/null 2>&1; then
         CRON_DAEMON="dcron"
+    elif command -v crond >/dev/null 2>&1 && [ -f /sbin/crond ]; then
+        CRON_DAEMON="crond"
     else
         # Default to busybox crond (built into Alpine)
         CRON_DAEMON="crond"
