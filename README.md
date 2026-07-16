@@ -106,6 +106,7 @@ reboot
 **Deployment after conversion:**
 ```bash
 su -
+apk add git
 git clone https://github.com/BKWSU-UK/tc-server.git /var/www/html/trafficcontrol
 cd /var/www/html/trafficcontrol
 bash deploy.sh
