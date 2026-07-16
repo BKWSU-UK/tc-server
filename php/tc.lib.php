@@ -906,7 +906,7 @@ function calculateBankHolidays($yr) {
 
     $dirPlayed = $playList->lastPlay->{$phash};
 
-    if (count($dirList) > 0) {
+    if ($dirList && count($dirList) > 0) {
       switch ($entry->how) {
         case 'seq':
           //Search for next entry in list
