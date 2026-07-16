@@ -69,7 +69,7 @@ if [ "$TC_OS" = "alpine" ]; then
     echo "Using PHP package series: php${PHPV}"
     # nginx, PHP + required extensions, audio tools, and the GNU toolchain
     # (coreutils, grep w/ PCRE, procps, bash, util-linux) so exec() commands
-    # behave like GNU rather than BusyBox. Note: dcron and pulseaudio-utils may
+    # behave like GNU rather than BusyBox. Note: pulseaudio-utils may
     # not be available on all Alpine versions; use busybox crond and alsa-utils.
     # Try with optional packages first, then without if they fail.
     $SUDO apk add --no-cache \
@@ -79,7 +79,7 @@ if [ "$TC_OS" = "alpine" ]; then
         "php${PHPV}-ctype" "php${PHPV}-fileinfo" \
         "php${PHPV}-phar" "php${PHPV}-openssl" \
         mplayer alsa-utils bc \
-        coreutils grep procps bash util-linux tzdata dcron pulseaudio-utils 2>/dev/null || \
+        coreutils grep procps bash util-linux tzdata pulseaudio-utils 2>/dev/null || \
     $SUDO apk add --no-cache \
         nginx git \
         "php${PHPV}" "php${PHPV}-fpm" "php${PHPV}-cli" \
@@ -284,6 +284,17 @@ $SUDO nginx -t
 # 8. Set up the scheduler cron job
 echo "Setting up cron job..."
 if [ "$TC_OS" = "alpine" ]; then
+    # Detect which cron daemon is installed (dcron or busybox crond)
+    if command -v crond >/dev/null 2>&1 && [ -f /sbin/crond ]; then
+        CRON_DAEMON="crond"
+    elif command -v dcron >/dev/null 2>&1; then
+        CRON_DAEMON="dcron"
+    else
+        # Default to busybox crond (built into Alpine)
+        CRON_DAEMON="crond"
+    fi
+    echo "Using cron daemon: $CRON_DAEMON"
+
     # BusyBox/dcron reads per-user crontabs from /etc/crontabs/<user> (no user field)
     $SUDO mkdir -p /etc/crontabs
     printf '* * * * * /usr/bin/php %s/php/cron.php >> %s/.tcsys/cron.log 2>&1\n' \
@@ -314,12 +325,11 @@ if [ "$TC_OS" = "alpine" ]; then
     $SUDO rc-update add "php-fpm${TC_PHP_NODOT}" default 2>/dev/null || \
         $SUDO rc-update add php-fpm default 2>/dev/null || true
     $SUDO rc-update add nginx default 2>/dev/null || true
-    $SUDO rc-update add crond default 2>/dev/null || \
-        $SUDO rc-update add dcron default 2>/dev/null || true
+    $SUDO rc-update add "$CRON_DAEMON" default 2>/dev/null || true
     $SUDO rc-service "php-fpm${TC_PHP_NODOT}" restart 2>/dev/null || \
         $SUDO rc-service php-fpm restart 2>/dev/null || true
     $SUDO rc-service nginx restart
-    $SUDO rc-service crond restart 2>/dev/null || $SUDO rc-service dcron restart 2>/dev/null || true
+    $SUDO rc-service "$CRON_DAEMON" restart 2>/dev/null || true
 else
     $SUDO systemctl reload nginx
     $SUDO systemctl restart "php${TC_PHP_DOT}-fpm"
