@@ -57,7 +57,7 @@ Alpine minimal does not include sudo by default. Run as root.
 
 **IMPORTANT: Convert Alpine from diskless to traditional installation first**
 
-Alpine on Raspberry Pi installs in diskless mode by default (root filesystem in RAM). For production use, convert to a traditional installation where the root filesystem is on persistent storage:
+Alpine on Raspberry Pi installs in diskless mode by default (root filesystem in RAM). Convert to a traditional installation where the root filesystem is on persistent storage:
 
 ```bash
 # Convert Alpine to traditional installation (run as root)
@@ -76,21 +76,6 @@ git clone https://github.com/BKWSU-UK/tc-server.git /var/www/html/trafficcontrol
 cd /var/www/html/trafficcontrol
 bash deploy.sh
 ```
-
-**If you must use diskless mode** (not recommended for production):
-On diskless systems, cloning the entire repo to RAM will fill up memory. Download just the deploy script and its dependencies first:
-```bash
-su -
-mkdir -p scripts
-wget https://raw.githubusercontent.com/BKWSU-UK/tc-server/main/deploy.sh
-wget https://raw.githubusercontent.com/BKWSU-UK/tc-server/main/scripts/os-detect.sh -O scripts/os-detect.sh
-chmod +x deploy.sh
-TC_DATA_DIR=/mnt/data sh deploy.sh
-```
-
-Note: Alpine minimal uses `sh` (BusyBox) by default. The deploy.sh script will install bash as part of the GNU toolchain.
-
-The script will clone the full repository to your persistent storage and create a symlink.
 
     Or set up manually:
 
