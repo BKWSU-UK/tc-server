@@ -178,6 +178,20 @@ if [ "$DISKLESS_MODE" = true ]; then
         fi
     fi
 
+    # Verify that DATA_DIR is on a mounted filesystem (not in RAM)
+    if ! mount | grep -q "on $DATA_DIR "; then
+        echo "Error: $DATA_DIR is not a mounted filesystem."
+        echo "Diskless mode requires persistent storage to be mounted."
+        echo ""
+        echo "To mount a device, run:"
+        echo "  mkdir -p $DATA_DIR"
+        echo "  mount /dev/sdX1 $DATA_DIR  # Replace sdX1 with your device"
+        echo ""
+        echo "Or add to /etc/fstab for automatic mounting on boot:"
+        echo "  echo '/dev/sdX1 $DATA_DIR ext4 defaults 0 0' >> /etc/fstab"
+        exit 1
+    fi
+
     # In diskless mode, the entire repo is already in persistent storage (symlinked above)
     # so .tcsys and Music are already in the right place. Just ensure they exist.
     $SUDO mkdir -p "$DEST_DIR/.tcsys" "$DEST_DIR/Music"
