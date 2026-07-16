@@ -1384,7 +1384,11 @@ const TC = (() => {
             clearTimeout(TC.hidePlayerTimeout);
           }
           $('#audioPlayerDiv').show();
-          $('#nowPlayingTag').empty().append(data.what);
+          var displayText = data.what;
+          if (data.nullAudio) {
+            displayText += ' <span class="text-warning">(No sound card: simulating play)</span>';
+          }
+          $('#nowPlayingTag').empty().append(displayText);
           if (data.howLong !== null && data.howLong > 0) {
             const pct = Math.max(0, Math.min(100, 100 * data.elapsed / data.howLong));
             $('#systemProgressBar').css('width', pct + '%');

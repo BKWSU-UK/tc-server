@@ -1052,6 +1052,7 @@ function calculateBankHolidays($yr) {
         return ['playing' => false];
       }
     }
+    $nullAudio = file_exists('/.dockerenv');
     return [
       'playing' => true,
       'what' => $data['what'],
@@ -1060,7 +1061,8 @@ function calculateBankHolidays($yr) {
       'elapsed' => $elapsed,
       'remaining' => ($howLong !== null) ? max(0, $howLong - $elapsed) : null,
       'volume' => $data['volume'],
-      'index' => $data['index']
+      'index' => $data['index'],
+      'nullAudio' => $nullAudio
     ];
   }
 
