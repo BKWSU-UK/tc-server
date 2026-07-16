@@ -170,7 +170,7 @@ Alpine on Raspberry Pi typically runs in diskless mode where the root filesystem
 
 2. **Run deploy.sh with persistent storage location:**
    ```bash
-   TC_DATA_DIR=/mnt/data bash deploy.sh
+   TC_DATA_DIR=/mnt/data sh deploy.sh
    ```
 
    The script will:
