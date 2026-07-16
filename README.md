@@ -60,13 +60,14 @@ Alpine minimal does not include sudo by default. Run as root.
 Alpine on Raspberry Pi installs in diskless mode by default (root filesystem in RAM). Convert to a traditional installation where the root filesystem is on persistent storage.
 
 **Install to SD card (recommended):**
-Since `setup-disk` cannot repartition the currently booted disk, create a new partition first:
+
+The Raspberry Pi firmware requires a FAT32 boot partition, which already exists as `/dev/mmcblk0p1` (used for diskless boot). Create a new ext4 partition for the root filesystem and reuse the existing boot partition:
 
 ```bash
 # Install e2fsprogs for partition management
 apk add e2fsprogs
 
-# Create a new partition on the SD card
+# Create a new partition on the SD card (using remaining free space)
 fdisk /dev/mmcblk0
 # Press 'n' for new partition, 'p' for primary, accept defaults
 # Press 'w' to write changes
@@ -74,19 +75,22 @@ fdisk /dev/mmcblk0
 # Format the new partition (replace mmcblk0p2 with your partition)
 mkfs.ext4 /dev/mmcblk0p2
 
-# Mount the partition temporarily
+# Mount the root partition
 mkdir -p /mnt/alpine-root
 mount /dev/mmcblk0p2 /mnt/alpine-root
 
-# Install Alpine to the mounted partition
-setup-disk -m sys /mnt/alpine-root
+# Mount the existing boot partition inside the new root
+mkdir -p /mnt/alpine-root/boot
+mount /dev/mmcblk0p1 /mnt/alpine-root/boot
 
-# Add to /etc/fstab for automatic mounting
-echo "/dev/mmcblk0p2 / ext4 defaults 0 0" >> /etc/fstab
+# Install Alpine to the mounted root (setup-disk will detect boot automatically)
+setup-disk -m sys /mnt/alpine-root
 
 # Reboot to boot from the new installation
 reboot
 ```
+
+`setup-disk` will configure `/etc/fstab` automatically for both partitions.
 
 **Deployment after conversion:**
 ```bash
