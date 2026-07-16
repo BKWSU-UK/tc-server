@@ -61,7 +61,7 @@ Alpine on Raspberry Pi installs in diskless mode by default (root filesystem in 
 
 **Install to SD card (recommended):**
 
-The Raspberry Pi firmware requires a FAT32 boot partition. The default diskless boot partition (129M) is too small for a full kernel install, so repartition the SD card with a larger boot partition and an ext4 root partition:
+The Raspberry Pi firmware requires a FAT32 boot partition. The default diskless boot partition (129M) is too small for a full kernel install. First repartition to create a larger boot partition, then create an ext4 root partition:
 
 ```bash
 # Install partition management tools (fdisk and mdev are built into BusyBox)
@@ -73,9 +73,9 @@ umount /.modloop 2>/dev/null || true
 # Unmount the existing boot partition before repartitioning
 umount /media/mmcblk0p1 2>/dev/null || true
 
-# Repartition the SD card
+# Repartition the SD card: resize boot to 512M, create ext4 root for remaining space
 fdisk /dev/mmcblk0
-# d, then Enter (repeat for any other existing partitions) to delete them
+# d, then Enter (delete existing partitions)
 # n, p, 1, Enter, +512M           -> new boot partition (512M)
 # t, c                            -> set type to W95 FAT32 (LBA)
 # n, p, 2, Enter, Enter           -> new root partition (remaining space)
