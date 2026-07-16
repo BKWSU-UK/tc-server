@@ -89,6 +89,49 @@ Traffic Control can run as a Home Assistant add-on, which handles all dependenci
     * * * * * /usr/bin/php /var/www/html/trafficcontrol/php/cron.php > /dev/null 2>&1
     ```
 
+#### Alpine on Raspberry Pi (Diskless Mode)
+
+Alpine on Raspberry Pi typically runs in diskless mode where the root filesystem is in RAM (overlayfs or tmpfs). This means changes to `/var/www/html` are lost on reboot. Persistent storage is required for:
+
+- `.tcsys/` - Runtime state (playlists, logs, locks)
+- `Music/` - Audio files
+
+**Deployment with persistent storage:**
+
+1. **Prepare persistent storage** (USB drive, SD card partition, or network mount):
+   ```bash
+   # Mount your storage (example for USB drive)
+   sudo mkdir -p /mnt/data
+   sudo mount /dev/sdX1 /mnt/data
+   # Add to /etc/fstab for automatic mounting on boot
+   echo "/dev/sdX1 /mnt/data ext4 defaults 0 0" | sudo tee -a /etc/fstab
+   ```
+
+2. **Run deploy.sh with persistent storage location:**
+   ```bash
+   TC_DATA_DIR=/mnt/data sudo -E bash deploy.sh
+   ```
+
+   The script will:
+   - Detect diskless mode automatically
+   - Create symlinks from the app directories to persistent storage
+   - Migrate any existing data to the new location
+   - Set appropriate ownership
+
+   Alternatively, let the script auto-detect common locations:
+   ```bash
+   sudo bash deploy.sh
+   ```
+   It will check `/mnt/data`, `/media/usb`, and `/srv/data` automatically.
+
+**What gets persisted:**
+- `.tcsys/` → `$DATA_DIR/tcsys` (playlists, logs, locks, scheduler state)
+- `Music/` → `$DATA_DIR/music` (audio files)
+
+**What stays in RAM:**
+- Application code (`/var/www/html/trafficcontrol/` except the symlinks above)
+- This is safe because it's deployed from git and can be re-deployed after reboot
+
 ## Configuration
 
 ### Audio Output

@@ -18,6 +18,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_URL="${TC_REPO_URL:-https://github.com/BKWSU-UK/tc-server.git}"
 BRANCH="${TC_BRANCH:-main}"
 
+# Persistent storage for diskless mode (Alpine on Raspberry Pi)
+# Override via environment: TC_DATA_DIR=/mnt/data sudo -E bash deploy.sh
+DATA_DIR="${TC_DATA_DIR:-}"
+
 # Detect OS (Alpine/Debian) and load per-distro paths, users and helpers.
 # shellcheck source=scripts/os-detect.sh
 source "$SCRIPT_DIR/scripts/os-detect.sh"
@@ -25,7 +29,22 @@ source "$SCRIPT_DIR/scripts/os-detect.sh"
 # Use sudo only when not already root (Alpine minimal has no sudo).
 if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
 
-echo "Starting deployment to $DEST_DIR (OS: $TC_OS, app user: $APP_USER, nginx: $NGINX_USER)..."
+# Detect diskless mode (Alpine on Raspberry Pi typically uses overlayfs or tmpfs for root)
+DISKLESS_MODE=false
+if [ "$TC_OS" = "alpine" ]; then
+    if mount | grep -q "on / type overlayfs" || mount | grep -q "on / type tmpfs"; then
+        DISKLESS_MODE=true
+        echo "Detected diskless mode (overlayfs/tmpfs root filesystem)"
+    fi
+fi
+
+# If DATA_DIR is explicitly set, use it regardless of diskless detection
+if [ -n "$DATA_DIR" ]; then
+    echo "Using persistent data directory: $DATA_DIR"
+    DISKLESS_MODE=true
+fi
+
+echo "Starting deployment to $DEST_DIR (OS: $TC_OS, app user: $APP_USER, nginx: $NGINX_USER, diskless: $DISKLESS_MODE)..."
 
 # 1. Install required packages
 echo "Installing required packages..."
@@ -84,7 +103,55 @@ $SUDO git -C "$DEST_DIR" checkout -f -B "$BRANCH" "origin/$BRANCH"
 
 # 3. Ensure the runtime system dir and Music dir exist (.tcsys ships only the
 #    default playlist via git; everything else in it is created at runtime).
-$SUDO mkdir -p "$DEST_DIR/.tcsys" "$DEST_DIR/Music"
+# For diskless mode, configure persistent storage.
+if [ "$DISKLESS_MODE" = true ]; then
+    if [ -z "$DATA_DIR" ]; then
+        # Auto-detect or prompt for persistent storage location
+        echo "Diskless mode detected. Persistent storage is required for .tcsys and Music."
+        echo "Common locations: /mnt/data, /media/usb, /srv/data"
+        echo "Set TC_DATA_DIR environment variable to specify location, e.g.:"
+        echo "  TC_DATA_DIR=/mnt/data sudo -E bash deploy.sh"
+        echo ""
+        # Try common locations
+        for loc in /mnt/data /media/usb /srv/data; do
+            if [ -d "$loc" ] && [ -w "$loc" ]; then
+                DATA_DIR="$loc"
+                echo "Auto-detected writable persistent storage: $DATA_DIR"
+                break
+            fi
+        done
+        if [ -z "$DATA_DIR" ]; then
+            echo "Error: No writable persistent storage found. Please set TC_DATA_DIR."
+            exit 1
+        fi
+    fi
+
+    # Create persistent storage directories
+    $SUDO mkdir -p "$DATA_DIR/tcsys" "$DATA_DIR/music"
+    $SUDO mkdir -p "$DEST_DIR/.tcsys" "$DEST_DIR/Music"
+
+    # Remove existing directories if they are not symlinks
+    if [ -d "$DEST_DIR/.tcsys" ] && [ ! -L "$DEST_DIR/.tcsys" ]; then
+        echo "Migrating existing .tcsys to persistent storage..."
+        $SUDO cp -a "$DEST_DIR/.tcsys/"* "$DATA_DIR/tcsys/" 2>/dev/null || true
+        $SUDO rm -rf "$DEST_DIR/.tcsys"
+    fi
+    if [ -d "$DEST_DIR/Music" ] && [ ! -L "$DEST_DIR/Music" ]; then
+        echo "Migrating existing Music to persistent storage..."
+        $SUDO cp -a "$DEST_DIR/Music/"* "$DATA_DIR/music/" 2>/dev/null || true
+        $SUDO rm -rf "$DEST_DIR/Music"
+    fi
+
+    # Create symlinks to persistent storage
+    $SUDO ln -sf "$DATA_DIR/tcsys" "$DEST_DIR/.tcsys"
+    $SUDO ln -sf "$DATA_DIR/music" "$DEST_DIR/Music"
+
+    echo "Configured persistent storage at $DATA_DIR"
+    echo "  .tcsys -> $DATA_DIR/tcsys"
+    echo "  Music -> $DATA_DIR/music"
+else
+    $SUDO mkdir -p "$DEST_DIR/.tcsys" "$DEST_DIR/Music"
+fi
 
 # 4. Create the dedicated app user (Alpine) and grant it ALSA access.
 # php-fpm/cron run as this low-priv user; it is the only account in "audio".
@@ -115,6 +182,9 @@ fi
 # world-readability for nginx is guaranteed by the umask set at the top.
 echo "Setting ownership..."
 $SUDO chown -R "$APP_USER:$APP_GROUP" "$DEST_DIR"
+if [ "$DISKLESS_MODE" = true ] && [ -n "$DATA_DIR" ]; then
+    $SUDO chown -R "$APP_USER:$APP_GROUP" "$DATA_DIR"
+fi
 
 # 6. Verify required dependencies
 echo "Verifying dependencies..."
