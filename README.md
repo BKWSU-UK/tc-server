@@ -27,8 +27,8 @@ Traffic Control can run as a Home Assistant add-on, which handles all dependenci
 #### Prerequisites
 
 - **Web Server:** Apache or Nginx with PHP support.
-- **PHP:** Version 7.4 or higher recommended (needs the `calendar`, `fileinfo`, `mbstring` and `session` extensions).
-- **Operating System:** Linux — Debian/Ubuntu/Raspberry Pi OS **or** Alpine. `deploy.sh` auto-detects the distro (`apt`+systemd vs `apk`+OpenRC) and installs the right packages.
+- **PHP:** Version 8.0 or higher recommended (needs the `ctype`, `fileinfo`, `mbstring` and `session` extensions).
+- **Operating System:** Linux — Debian/Ubuntu/Raspberry Pi OS **or** Alpine (including Alpine on Raspberry Pi). `deploy.sh` auto-detects the distro (`apt`+systemd vs `apk`+OpenRC) and installs the right packages.
 - **Audio Hardware:** ALSA-compatible sound card or Bluetooth audio.
 - **System Utilities:**
   - `mplayer` (for audio playback)
@@ -51,6 +51,7 @@ Traffic Control can run as a Home Assistant add-on, which handles all dependenci
 
     Or set up manually:
 
+    **Debian/Ubuntu/Raspberry Pi OS:**
     ```bash
     cd /var/www/html/trafficcontrol
     mkdir .tcsys
@@ -59,11 +60,31 @@ Traffic Control can run as a Home Assistant add-on, which handles all dependenci
     sudo apt install mplayer alsa-utils bc
     ```
 
+    **Alpine (including Alpine on Raspberry Pi):**
+    ```bash
+    cd /var/www/html/trafficcontrol
+    mkdir .tcsys
+    sudo chown -R www-data:www-data .tcsys Music
+    sudo chmod -R 775 .tcsys Music
+    sudo apk add mplayer alsa-utils bc coreutils grep procps bash util-linux
+    ```
+
 3.  **Configure the cron job** (if not using `deploy.sh`):
+
+    **Debian/Ubuntu/Raspberry Pi OS:**
     ```bash
     sudo crontab -u www-data -e
     ```
     Add:
+    ```cron
+    * * * * * /usr/bin/php /var/www/html/trafficcontrol/php/cron.php > /dev/null 2>&1
+    ```
+
+    **Alpine (including Alpine on Raspberry Pi):**
+    ```bash
+    sudo crontab -u www-data -e
+    ```
+    Add (BusyBox crond format, no user field):
     ```cron
     * * * * * /usr/bin/php /var/www/html/trafficcontrol/php/cron.php > /dev/null 2>&1
     ```
@@ -125,7 +146,7 @@ The path appears in the Content column. For folders, choose Random or Sequential
 
 The **System Mode** toggle determines where audio plays:
 
-- **System**: Audio plays on the Raspberry Pi hardware (requires LAN access).
+- **System**: Audio plays on the server hardware (Raspberry Pi, Alpine on Raspberry Pi, or any Linux system) (requires LAN access).
 - **Local**: Audio plays through the browser on your computer.
 
 When in System mode, the **Preview Mode** toggle controls where preview playback occurs.
