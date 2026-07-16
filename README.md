@@ -64,10 +64,12 @@ bash deploy.sh
 ```
 
 **For Alpine on Raspberry Pi (diskless mode):**
-On diskless systems, cloning the entire repo to RAM will fill up memory. Download just the deploy script first:
+On diskless systems, cloning the entire repo to RAM will fill up memory. Download just the deploy script and its dependencies first:
 ```bash
 su -
+mkdir -p scripts
 wget https://raw.githubusercontent.com/BKWSU-UK/tc-server/main/deploy.sh
+wget https://raw.githubusercontent.com/BKWSU-UK/tc-server/main/scripts/os-detect.sh -O scripts/os-detect.sh
 chmod +x deploy.sh
 TC_DATA_DIR=/mnt/data sh deploy.sh
 ```
