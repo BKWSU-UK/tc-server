@@ -354,9 +354,13 @@ if [ "$DISKLESS_MODE" = true ] && [ "$TC_OS" = "alpine" ]; then
 
     # Persist the symlink from /var/www/html/trafficcontrol to persistent storage
     # We need to recreate the symlink on boot since /var/www/html is in RAM
-    # Add a local boot script to recreate the symlink
+    # Add a local boot script to recreate the symlink and reinstall packages
     $SUDO tee /etc/local.d/trafficcontrol.mount > /dev/null << EOF
 #!/bin/sh
+# Reinstall packages from persisted world file (diskless mode loses installed packages on reboot)
+apk update
+apk add --no-cache \$(cat /etc/apk/world)
+
 # Recreate symlink to persistent storage on boot
 if [ -d "$DATA_DIR/trafficcontrol" ]; then
     mkdir -p /var/www/html
@@ -364,6 +368,11 @@ if [ -d "$DATA_DIR/trafficcontrol" ]; then
     ln -sf "$DATA_DIR/trafficcontrol" /var/www/html/trafficcontrol
     echo "Recreated symlink: /var/www/html/trafficcontrol -> $DATA_DIR/trafficcontrol"
 fi
+
+# Ensure services are started
+rc-service php-fpm85 start 2>/dev/null || rc-service php-fpm start 2>/dev/null || true
+rc-service nginx start
+rc-service crond start 2>/dev/null || rc-service dcron start 2>/dev/null || true
 EOF
     $SUDO chmod +x /etc/local.d/trafficcontrol.mount
     $SUDO lbu include /etc/local.d
