@@ -55,7 +55,21 @@ Traffic Control can run as a Home Assistant add-on, which handles all dependenci
 
 Alpine minimal does not include sudo by default. Run as root.
 
-**For regular Alpine (not diskless):**
+**IMPORTANT: Convert Alpine from diskless to traditional installation first**
+
+Alpine on Raspberry Pi installs in diskless mode by default (root filesystem in RAM). For production use, convert to a traditional installation where the root filesystem is on persistent storage:
+
+```bash
+# Convert Alpine to traditional installation (run as root)
+setup-disk -m sys /dev/mmcblk0
+```
+
+After conversion, reboot and Alpine will boot from persistent storage. This ensures:
+- Packages (nginx, php-fpm, etc.) persist across reboots
+- No internet connection required for boot
+- Faster boot times
+
+**Deployment after conversion:**
 ```bash
 su -
 git clone https://github.com/BKWSU-UK/tc-server.git /var/www/html/trafficcontrol
@@ -63,7 +77,7 @@ cd /var/www/html/trafficcontrol
 bash deploy.sh
 ```
 
-**For Alpine on Raspberry Pi (diskless mode):**
+**If you must use diskless mode** (not recommended for production):
 On diskless systems, cloning the entire repo to RAM will fill up memory. Download just the deploy script and its dependencies first:
 ```bash
 su -
@@ -120,51 +134,6 @@ The script will clone the full repository to your persistent storage and create 
     ```cron
     * * * * * /usr/bin/php /var/www/html/trafficcontrol/php/cron.php > /dev/null 2>&1
     ```
-
-#### Alpine on Raspberry Pi
-
-**IMPORTANT:** Alpine on Raspberry Pi installs in diskless mode by default (root filesystem in RAM). For production use, **convert to a traditional installation** where the root filesystem is on persistent storage. This ensures:
-- Packages (nginx, php-fpm, etc.) persist across reboots
-- No internet connection required for boot
-- Faster boot times (no package reinstallation)
-
-**Converting Alpine from diskless to traditional installation:**
-
-1. **Install to SD card (run setup-alpine):**
-   ```bash
-   setup-alpine
-   ```
-   When prompted for installation disk, select your SD card (e.g., `/dev/mmcblk0`). This will install Alpine to disk instead of running in RAM.
-
-2. **Or manually install to disk:**
-   ```bash
-   # Install Alpine to disk (replace mmcblk0 with your device)
-   setup-disk -m sys /dev/mmcblk0
-   ```
-
-After conversion, Alpine will boot from persistent storage and you can use the regular Alpine deployment instructions below.
-
-**If you must use diskless mode** (not recommended for production):
-- Root filesystem is in RAM and changes are lost on reboot
-- Persistent storage is required for `.tcsys/` and `Music/`
-- See "Alpine on Raspberry Pi (Diskless Mode)" section below
-
-#### Alpine on Raspberry Pi (Diskless Mode)
-
-**NOT RECOMMENDED FOR PRODUCTION:** Diskless mode runs the entire root filesystem in RAM. This requires:
-- Internet connection on every boot to reinstall packages
-- Slower boot times
-- Complex persistence configuration using `lbu`
-
-**Only use diskless mode if you have a specific requirement for it.** Otherwise, convert to a traditional installation as described above.
-
-If you must use diskless mode, the deploy.sh script will:
-- Clone the repository to persistent storage (specified via `TC_DATA_DIR`)
-- Create a symlink from `/var/www/html/trafficcontrol` to persistent storage
-- Persist configuration using `lbu` (fstab, nginx config, php-fpm config, cron, hosts file)
-- Persist package binaries to overlay (nginx, php-fpm, mplayer, etc.)
-
-**Note:** Even with package persistence, complex library dependencies may not be fully captured by `lbu`. A traditional installation is strongly recommended for production use.
 
 ## Configuration
 
