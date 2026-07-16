@@ -49,25 +49,44 @@ echo "Starting deployment to $DEST_DIR (OS: $TC_OS, app user: $APP_USER, nginx: 
 # 1. Install required packages
 echo "Installing required packages..."
 if [ "$TC_OS" = "alpine" ]; then
+    # Enable community repository for PHP and other packages
+    if ! grep -q "^http.*community" /etc/apk/repositories; then
+        echo "Enabling Alpine community repository..."
+        $SUDO sed -i '/^http.*main/s/$/\nhttp:\/\/dl-cdn.alpinelinux.org\/alpine\/v$(cat /etc/alpine-release | cut -d. -f1,2)\/community/' /etc/apk/repositories
+    fi
     $SUDO apk update
     # Pick the newest available PHP 8.x package series
     PHPV=""
     for v in 85 84 83 82 81; do
-        if $SUDO apk add --no-cache --simulate "php$v" >/dev/null 2>&1; then PHPV="$v"; break; fi
+        if $SUDO apk search --no-cache "php${v}" 2>/dev/null | grep -q "^php${v}-"; then
+            PHPV="$v"
+            echo "Found PHP package series: php${PHPV}"
+            break
+        fi
     done
-    [ -n "$PHPV" ] || PHPV=83
+    [ -n "$PHPV" ] || { echo "Error: No PHP 8.x package found in repositories"; exit 1; }
     echo "Using PHP package series: php${PHPV}"
     # nginx, PHP + required extensions, audio tools, and the GNU toolchain
     # (coreutils, grep w/ PCRE, procps, bash, util-linux) so exec() commands
-    # behave like GNU rather than BusyBox. dcron provides crond + /etc/crontabs.
+    # behave like GNU rather than BusyBox. Note: dcron and pulseaudio-utils may
+    # not be available on all Alpine versions; use busybox crond and alsa-utils.
+    # Try with optional packages first, then without if they fail.
     $SUDO apk add --no-cache \
         nginx git \
         "php${PHPV}" "php${PHPV}-fpm" "php${PHPV}-cli" \
         "php${PHPV}-mbstring" "php${PHPV}-session" \
-        "php${PHPV}-ctype" "php${PHPV}-fileinfo" "php${PHPV}-calendar" \
+        "php${PHPV}-ctype" "php${PHPV}-fileinfo" \
         "php${PHPV}-phar" "php${PHPV}-openssl" \
-        mplayer alsa-utils pulseaudio-utils bc \
-        coreutils grep procps bash util-linux tzdata dcron
+        mplayer alsa-utils bc \
+        coreutils grep procps bash util-linux tzdata dcron pulseaudio-utils 2>/dev/null || \
+    $SUDO apk add --no-cache \
+        nginx git \
+        "php${PHPV}" "php${PHPV}-fpm" "php${PHPV}-cli" \
+        "php${PHPV}-mbstring" "php${PHPV}-session" \
+        "php${PHPV}-ctype" "php${PHPV}-fileinfo" \
+        "php${PHPV}-phar" "php${PHPV}-openssl" \
+        mplayer alsa-utils bc \
+        coreutils grep procps bash util-linux tzdata
     $SUDO ln -sf "/usr/bin/php${PHPV}" /usr/bin/php
 else
     $SUDO apt update
