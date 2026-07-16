@@ -19,9 +19,10 @@
   define ( 'OS_COMMANDS', 'bc|amixer|mplayer|bash');
   define ( 'NO_BUSYBOX_COMMAND', 'grep|date|ps');
   // PHP extensions the app relies on that are NOT bundled/enabled by default on
-  // Alpine (separate phpXX-* packages) or Ubuntu: calendar (easter_days),
-  // ctype (ctype_digit), fileinfo (mime_content_type).
-  define ( 'PHP_EXTENSIONS', 'calendar|ctype|fileinfo|session|mbstring');
+  // Alpine (separate phpXX-* packages) or Ubuntu: ctype (ctype_digit),
+  // fileinfo (mime_content_type). Note: calendar extension was removed in PHP 8.1,
+  // its functionality is now in the date extension (always bundled).
+  define ( 'PHP_EXTENSIONS', 'ctype|fileinfo|session|mbstring');
 
   //This may be changed by some functions but must be set now
   //to prevent warnings
