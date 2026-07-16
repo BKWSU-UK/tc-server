@@ -105,21 +105,53 @@ echo "Detected PHP version: $TC_PHP_DOT"
 #    a matter of re-running this script (it fetches the latest) or running
 #    `git pull` inside $DEST_DIR. A shallow checkout keeps the (large) tracked
 #    Music samples from pulling full history.
-echo "Deploying branch '$BRANCH' from $REPO_URL to $DEST_DIR..."
-$SUDO mkdir -p "$DEST_DIR"
-# Let root/sudo operate on a repo owned by $APP_USER (chowned below) without
-# git's "dubious ownership" safeguard aborting the run.
-$SUDO git config --global --get-all safe.directory 2>/dev/null | grep -qxF "$DEST_DIR" || \
-    $SUDO git config --global --add safe.directory "$DEST_DIR"
-if [ ! -d "$DEST_DIR/.git" ]; then
-    $SUDO git init -q "$DEST_DIR"
-    $SUDO git -C "$DEST_DIR" remote add origin "$REPO_URL"
+#    For diskless mode, clone to persistent storage first to avoid filling RAM.
+if [ "$DISKLESS_MODE" = true ] && [ -n "$DATA_DIR" ]; then
+    # In diskless mode, clone to persistent storage to avoid filling RAM
+    REAL_DEST_DIR="$DATA_DIR/trafficcontrol"
+    echo "Diskless mode: cloning to persistent storage at $REAL_DEST_DIR"
+    $SUDO mkdir -p "$REAL_DEST_DIR"
+    # Let root/sudo operate on a repo owned by $APP_USER (chowned below) without
+    # git's "dubious ownership" safeguard aborting the run.
+    $SUDO git config --global --get-all safe.directory 2>/dev/null | grep -qxF "$REAL_DEST_DIR" || \
+        $SUDO git config --global --add safe.directory "$REAL_DEST_DIR"
+    if [ ! -d "$REAL_DEST_DIR/.git" ]; then
+        $SUDO git init -q "$REAL_DEST_DIR"
+        $SUDO git -C "$REAL_DEST_DIR" remote add origin "$REPO_URL"
+    fi
+    $SUDO git -C "$REAL_DEST_DIR" remote set-url origin "$REPO_URL"
+    $SUDO git -C "$REAL_DEST_DIR" fetch --depth 1 origin "$BRANCH"
+    # checkout -f overwrites tracked files but leaves gitignored runtime state in
+    # .tcsys/ (playListDb.JSON, logs, locks) and any user-uploaded Music intact.
+    $SUDO git -C "$REAL_DEST_DIR" checkout -f -B "$BRANCH" "origin/$BRANCH"
+
+    # Create symlink from RAM to persistent storage
+    $SUDO mkdir -p "$(dirname "$DEST_DIR")"
+    if [ -L "$DEST_DIR" ]; then
+        $SUDO rm -f "$DEST_DIR"
+    elif [ -d "$DEST_DIR" ]; then
+        echo "Removing existing directory $DEST_DIR (will be replaced with symlink)"
+        $SUDO rm -rf "$DEST_DIR"
+    fi
+    $SUDO ln -sf "$REAL_DEST_DIR" "$DEST_DIR"
+    echo "Created symlink: $DEST_DIR -> $REAL_DEST_DIR"
+else
+    echo "Deploying branch '$BRANCH' from $REPO_URL to $DEST_DIR..."
+    $SUDO mkdir -p "$DEST_DIR"
+    # Let root/sudo operate on a repo owned by $APP_USER (chowned below) without
+    # git's "dubious ownership" safeguard aborting the run.
+    $SUDO git config --global --get-all safe.directory 2>/dev/null | grep -qxF "$DEST_DIR" || \
+        $SUDO git config --global --add safe.directory "$DEST_DIR"
+    if [ ! -d "$DEST_DIR/.git" ]; then
+        $SUDO git init -q "$DEST_DIR"
+        $SUDO git -C "$DEST_DIR" remote add origin "$REPO_URL"
+    fi
+    $SUDO git -C "$DEST_DIR" remote set-url origin "$REPO_URL"
+    $SUDO git -C "$DEST_DIR" fetch --depth 1 origin "$BRANCH"
+    # checkout -f overwrites tracked files but leaves gitignored runtime state in
+    # .tcsys/ (playListDb.JSON, logs, locks) and any user-uploaded Music intact.
+    $SUDO git -C "$DEST_DIR" checkout -f -B "$BRANCH" "origin/$BRANCH"
 fi
-$SUDO git -C "$DEST_DIR" remote set-url origin "$REPO_URL"
-$SUDO git -C "$DEST_DIR" fetch --depth 1 origin "$BRANCH"
-# checkout -f overwrites tracked files but leaves gitignored runtime state in
-# .tcsys/ (playListDb.JSON, logs, locks) and any user-uploaded Music intact.
-$SUDO git -C "$DEST_DIR" checkout -f -B "$BRANCH" "origin/$BRANCH"
 
 # 3. Ensure the runtime system dir and Music dir exist (.tcsys ships only the
 #    default playlist via git; everything else in it is created at runtime).
@@ -146,29 +178,10 @@ if [ "$DISKLESS_MODE" = true ]; then
         fi
     fi
 
-    # Create persistent storage directories
-    $SUDO mkdir -p "$DATA_DIR/tcsys" "$DATA_DIR/music"
+    # In diskless mode, the entire repo is already in persistent storage (symlinked above)
+    # so .tcsys and Music are already in the right place. Just ensure they exist.
     $SUDO mkdir -p "$DEST_DIR/.tcsys" "$DEST_DIR/Music"
-
-    # Remove existing directories if they are not symlinks
-    if [ -d "$DEST_DIR/.tcsys" ] && [ ! -L "$DEST_DIR/.tcsys" ]; then
-        echo "Migrating existing .tcsys to persistent storage..."
-        $SUDO cp -a "$DEST_DIR/.tcsys/"* "$DATA_DIR/tcsys/" 2>/dev/null || true
-        $SUDO rm -rf "$DEST_DIR/.tcsys"
-    fi
-    if [ -d "$DEST_DIR/Music" ] && [ ! -L "$DEST_DIR/Music" ]; then
-        echo "Migrating existing Music to persistent storage..."
-        $SUDO cp -a "$DEST_DIR/Music/"* "$DATA_DIR/music/" 2>/dev/null || true
-        $SUDO rm -rf "$DEST_DIR/Music"
-    fi
-
-    # Create symlinks to persistent storage
-    $SUDO ln -sf "$DATA_DIR/tcsys" "$DEST_DIR/.tcsys"
-    $SUDO ln -sf "$DATA_DIR/music" "$DEST_DIR/Music"
-
-    echo "Configured persistent storage at $DATA_DIR"
-    echo "  .tcsys -> $DATA_DIR/tcsys"
-    echo "  Music -> $DATA_DIR/music"
+    echo "Using persistent storage at $DATA_DIR (entire app is symlinked)"
 else
     $SUDO mkdir -p "$DEST_DIR/.tcsys" "$DEST_DIR/Music"
 fi
@@ -201,9 +214,13 @@ fi
 # dirty the working tree; git already checked out the correct file modes, and
 # world-readability for nginx is guaranteed by the umask set at the top.
 echo "Setting ownership..."
-$SUDO chown -R "$APP_USER:$APP_GROUP" "$DEST_DIR"
 if [ "$DISKLESS_MODE" = true ] && [ -n "$DATA_DIR" ]; then
+    # In diskless mode, set ownership on the persistent storage location
+    REAL_DEST_DIR="$DATA_DIR/trafficcontrol"
+    $SUDO chown -R "$APP_USER:$APP_GROUP" "$REAL_DEST_DIR"
     $SUDO chown -R "$APP_USER:$APP_GROUP" "$DATA_DIR"
+else
+    $SUDO chown -R "$APP_USER:$APP_GROUP" "$DEST_DIR"
 fi
 
 # 6. Verify required dependencies
