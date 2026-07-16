@@ -67,6 +67,9 @@ The Raspberry Pi firmware requires a FAT32 boot partition. The default diskless 
 # Install partition management tools
 apk add e2fsprogs dosfstools
 
+# Unmount the kernel modules loop mount first (holds the boot partition busy)
+umount /.modloop 2>/dev/null || true
+
 # Unmount the existing boot partition before repartitioning
 umount /media/mmcblk0p1 2>/dev/null || true
 
