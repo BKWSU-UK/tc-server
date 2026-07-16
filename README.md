@@ -69,8 +69,10 @@ On diskless systems, cloning the entire repo to RAM will fill up memory. Downloa
 su -
 wget https://raw.githubusercontent.com/BKWSU-UK/tc-server/main/deploy.sh
 chmod +x deploy.sh
-TC_DATA_DIR=/mnt/data bash deploy.sh
+TC_DATA_DIR=/mnt/data sh deploy.sh
 ```
+
+Note: Alpine minimal uses `sh` (BusyBox) by default. The deploy.sh script will install bash as part of the GNU toolchain.
 
 The script will clone the full repository to your persistent storage and create a symlink.
 
