@@ -144,6 +144,9 @@ Alpine on Raspberry Pi typically runs in diskless mode where the root filesystem
    **Option B: Create new partition on SD card (if needed)**
    If your SD card only has a small boot partition (e.g., 129M FAT16), create a new partition for data:
    ```bash
+   # Install e2fsprogs for mkfs.ext4 (Alpine minimal)
+   apk add e2fsprogs
+
    # Create a new partition using fdisk
    fdisk /dev/mmcblk0
    # Press 'n' for new partition, 'p' for primary, accept defaults
