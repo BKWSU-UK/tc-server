@@ -81,6 +81,9 @@ fdisk /dev/mmcblk0
 # n, p, 2, Enter, Enter           -> new root partition (remaining space)
 # w                                -> write changes
 
+# Rescan the partition table so the kernel creates the new device nodes
+partx -u /dev/mmcblk0
+
 # Format the partitions
 mkfs.vfat -F 32 /dev/mmcblk0p1
 mkfs.ext4 /dev/mmcblk0p2
