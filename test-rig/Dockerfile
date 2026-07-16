@@ -7,6 +7,7 @@ RUN apk add --no-cache \
     php83-ctype \
     php83-fileinfo \
     php83-calendar \
+    php83-pcntl \
     mplayer \
     alsa-utils \
     pulseaudio-utils \
