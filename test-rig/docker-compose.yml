@@ -9,6 +9,7 @@ services:
     volumes:
       - ../:/var/www/html
       - php-socket:/run/php
+      - tc-data:/var/www/html/.tcsys
     networks:
       - tc-network
 
@@ -28,6 +29,7 @@ services:
 
 volumes:
   php-socket:
+  tc-data:
 
 networks:
   tc-network:

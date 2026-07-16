@@ -16,7 +16,7 @@ A Docker-based test environment for Traffic Control that requires only Docker on
 
 2. Start the containers:
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 3. Access the application:
@@ -27,20 +27,20 @@ A Docker-based test environment for Traffic Control that requires only Docker on
 ## Stopping the Test Rig
 
 ```bash
-docker-compose down
+docker compose down
 ```
 
 To also remove volumes (clears .tcsys state):
 ```bash
-docker-compose down -v
+docker compose down -v
 ```
 
 ## Rebuilding After Code Changes
 
 If you modify the Dockerfile or PHP dependencies:
 ```bash
-docker-compose build --no-cache
-docker-compose up -d
+docker compose build --no-cache
+docker compose up -d
 ```
 
 For application code changes (PHP, JS, HTML, CSS), the volume mount means changes are reflected immediately — no rebuild needed.
