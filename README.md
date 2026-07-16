@@ -61,13 +61,23 @@ Alpine on Raspberry Pi installs in diskless mode by default (root filesystem in 
 
 ```bash
 # Convert Alpine to traditional installation (run as root)
-setup-disk -m sys /dev/mmcblk0
+# Note: If running from the boot disk, use --force to override the check
+setup-disk -m sys -f /dev/mmcblk0
 ```
 
 After conversion, reboot and Alpine will boot from persistent storage. This ensures:
 - Packages (nginx, php-fpm, etc.) persist across reboots
 - No internet connection required for boot
 - Faster boot times
+
+**Alternative: Install to USB drive**
+If you prefer not to repartition the SD card, you can install Alpine to a USB drive instead:
+```bash
+# Insert USB drive and identify it (e.g., /dev/sda)
+lsblk
+# Install to USB drive
+setup-disk -m sys /dev/sda
+```
 
 **Deployment after conversion:**
 ```bash
