@@ -354,28 +354,36 @@ if [ "$DISKLESS_MODE" = true ] && [ "$TC_OS" = "alpine" ]; then
 
     # Persist the symlink from /var/www/html/trafficcontrol to persistent storage
     # We need to recreate the symlink on boot since /var/www/html is in RAM
-    # Add a local boot script to recreate the symlink and reinstall packages
-    $SUDO tee /etc/local.d/trafficcontrol.mount > /dev/null << EOF
-#!/bin/sh
-# Reinstall packages from persisted world file (diskless mode loses installed packages on reboot)
-apk update
-apk add --no-cache \$(cat /etc/apk/world)
+    # Create an OpenRC service to handle this on boot
+    $SUDO tee /etc/init.d/trafficcontrol-boot > /dev/null << EOF
+#!/sbin/openrc-run
 
-# Recreate symlink to persistent storage on boot
-if [ -d "$DATA_DIR/trafficcontrol" ]; then
-    mkdir -p /var/www/html
-    rm -f /var/www/html/trafficcontrol
-    ln -sf "$DATA_DIR/trafficcontrol" /var/www/html/trafficcontrol
-    echo "Recreated symlink: /var/www/html/trafficcontrol -> $DATA_DIR/trafficcontrol"
-fi
+description="Reinstall packages and recreate symlink for diskless mode"
 
-# Ensure services are started
-rc-service php-fpm85 start 2>/dev/null || rc-service php-fpm start 2>/dev/null || true
-rc-service nginx start
-rc-service crond start 2>/dev/null || rc-service dcron start 2>/dev/null || true
+depend() {
+    need net
+    after firewall
+}
+
+start() {
+    ebegin "Reinstalling packages for diskless mode"
+    apk update >/dev/null 2>&1
+    apk add --no-cache \$(cat /etc/apk/world) >/dev/null 2>&1
+    eend \$?
+
+    ebegin "Recreating symlink to persistent storage"
+    if [ -d "$DATA_DIR/trafficcontrol" ]; then
+        mkdir -p /var/www/html
+        rm -f /var/www/html/trafficcontrol
+        ln -sf "$DATA_DIR/trafficcontrol" /var/www/html/trafficcontrol
+        einfo "Recreated symlink: /var/www/html/trafficcontrol -> $DATA_DIR/trafficcontrol"
+    fi
+    eend 0
+}
 EOF
-    $SUDO chmod +x /etc/local.d/trafficcontrol.mount
-    $SUDO lbu include /etc/local.d
+    $SUDO chmod +x /etc/init.d/trafficcontrol-boot
+    $SUDO rc-update add trafficcontrol-boot default
+    $SUDO lbu include /etc/init.d/trafficcontrol-boot
 
     # Commit all changes to the overlay
     echo "Committing changes to overlay..."
