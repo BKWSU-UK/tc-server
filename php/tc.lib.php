@@ -397,6 +397,11 @@ function calculateBankHolidays($yr) {
   function getMplayerAudioOutput() {
     global $stored;
 
+    // Detect Docker environment and force null audio output for testing
+    if (file_exists('/.dockerenv')) {
+      return '-ao null';
+    }
+
     $selectedDevice = (isset($stored) && is_object($stored) && property_exists($stored, 'audioDevice'))
                       ? $stored->audioDevice : 'auto';
     $selectedDevice = resolveAudioDevice($selectedDevice);

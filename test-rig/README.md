@@ -53,7 +53,7 @@ For application code changes (PHP, JS, HTML, CSS), the volume mount means change
 
 ## Limitations
 
-- Audio playback (mplayer) is available but may not work in all Docker environments due to audio device access
+- **Audio playback**: mplayer runs with `-ao null` (null audio output) in the Docker environment. This allows testing all playback logic (file selection, duration tracking, chime scheduling) without requiring audio hardware. No actual sound will be produced.
 - The test rig uses Alpine Linux; production may use Debian
 - No cron/scheduler is configured in this test rig (manual testing only)
 
