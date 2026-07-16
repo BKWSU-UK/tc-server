@@ -1,13 +1,12 @@
-FROM php:8.3-fpm-alpine
+FROM php:8.5-fpm-alpine
 
 # Install required PHP extensions
 RUN apk add --no-cache \
-    php83-mbstring \
-    php83-session \
-    php83-ctype \
-    php83-fileinfo \
-    php83-calendar \
-    php83-pcntl \
+    php85-mbstring \
+    php85-session \
+    php85-ctype \
+    php85-fileinfo \
+    php85-pcntl \
     mplayer \
     alsa-utils \
     pulseaudio-utils \
