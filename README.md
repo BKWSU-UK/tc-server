@@ -77,7 +77,7 @@ umount /media/mmcblk0p1 2>/dev/null || true
 fdisk /dev/mmcblk0
 # d, then Enter (repeat for any other existing partitions) to delete them
 # n, p, 1, Enter, +512M           -> new boot partition (512M)
-# t, 1, c                         -> set type to W95 FAT32 (LBA)
+# t, c                            -> set type to W95 FAT32 (LBA)
 # n, p, 2, Enter, Enter           -> new root partition (remaining space)
 # w                                -> write changes
 
