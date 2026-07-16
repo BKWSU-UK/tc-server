@@ -1192,6 +1192,10 @@ function calculateBankHolidays($yr) {
   function checkPhpExtensions () {
     $flunked = "";
     $extensions = explode('|', PHP_EXTENSIONS);
+    // calendar extension was removed in PHP 8.1, only check for older versions
+    if (version_compare(PHP_VERSION, '8.1.0', '<')) {
+      $extensions[] = 'calendar';
+    }
     foreach ($extensions as $extension) {
       if (!extension_loaded($extension)) {
         debugLog("Required PHP extension, $extension, not loaded");
