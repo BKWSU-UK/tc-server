@@ -38,10 +38,12 @@ Traffic Control can run as a Home Assistant add-on, which handles all dependenci
 
 #### Steps
 
+**For Debian/Ubuntu/Raspberry Pi OS:**
+
 1.  **Clone the Repository:**
     Clone the project to your web server's document root:
     ```bash
-    git clone <repository-url> /var/www/html/trafficcontrol
+    git clone https://github.com/BKWSU-UK/tc-server.git /var/www/html/trafficcontrol
     ```
 
 2.  **Run the deployment script** (installs packages, configures nginx and cron automatically):
@@ -49,11 +51,28 @@ Traffic Control can run as a Home Assistant add-on, which handles all dependenci
     sudo bash deploy.sh
     ```
 
-    On Alpine (no sudo by default), run as root:
-    ```bash
-    su -
-    bash deploy.sh
-    ```
+**For Alpine (including Alpine on Raspberry Pi):**
+
+Alpine minimal does not include sudo by default. Run as root.
+
+**For regular Alpine (not diskless):**
+```bash
+su -
+git clone https://github.com/BKWSU-UK/tc-server.git /var/www/html/trafficcontrol
+cd /var/www/html/trafficcontrol
+bash deploy.sh
+```
+
+**For Alpine on Raspberry Pi (diskless mode):**
+On diskless systems, cloning the entire repo to RAM will fill up memory. Download just the deploy script first:
+```bash
+su -
+wget https://raw.githubusercontent.com/BKWSU-UK/tc-server/main/deploy.sh
+chmod +x deploy.sh
+TC_DATA_DIR=/mnt/data bash deploy.sh
+```
+
+The script will clone the full repository to your persistent storage and create a symlink.
 
     Or set up manually:
 
