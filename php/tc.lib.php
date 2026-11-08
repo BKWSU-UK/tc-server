@@ -407,6 +407,12 @@ function calculateBankHolidays($yr) {
                       ? $stored->audioDevice : 'auto';
     $selectedDevice = resolveAudioDevice($selectedDevice);
 
+    // Explicit Bluetooth selection: play through BlueALSA, matching the
+    // '-D bluealsa' mixer device that getDevCardInfo() uses for volume.
+    if (strpos($selectedDevice, 'bluetooth:') === 0) {
+      return '-ao alsa:device=bluealsa';
+    }
+
     // Check if PulseAudio/PipeWire is available via the current process's session
     $hasPulse = false;
     $xdgRuntime = getenv('XDG_RUNTIME_DIR');
@@ -455,6 +461,11 @@ function calculateBankHolidays($yr) {
         return '-ao alsa:device=plughw=' . $cardId . '.0';
       }
       return '-ao alsa:device=plughw=' . $cardNum . '.0';
+    }
+
+    // No ALSA card: fall back to a connected BlueALSA device, as getDevCardInfo() does
+    if (getDevCardInfo() === ' -D bluealsa') {
+      return '-ao alsa:device=bluealsa';
     }
 
     // Last resort - let mplayer auto-detect
@@ -1052,7 +1063,9 @@ function calculateBankHolidays($yr) {
         return ['playing' => false];
       }
     }
-    $nullAudio = (getCardNum() === -1);
+    // Only "simulating play" when mplayer has no real output to use
+    $audioOut = getMplayerAudioOutput();
+    $nullAudio = ($audioOut === '' || $audioOut === '-ao null');
     return [
       'playing' => true,
       'what' => $data['what'],
