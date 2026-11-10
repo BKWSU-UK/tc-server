@@ -28,6 +28,8 @@ tail -f .tcsys/cron.log
 
 There is no build step — this is a ready-to-deploy web app with no package manager or compilation.
 
+**Cache busting:** nginx serves `.js`/`.css` with a one-year immutable cache, so whenever you change `js/tc.js` or `css/tc.css`, bump its `?v=` query string in `index.html` (e.g. `?v=20261110a`). Otherwise browsers keep running the old file against the new HTML.
+
 ## Architecture
 
 ### Request Flow
@@ -44,7 +46,8 @@ There is no build step — this is a ready-to-deploy web app with no package man
 | `php/tc.php` | HTTP request handler; routes `action` parameter to class methods |
 | `php/TrafficControl.class.php` | Core class: load/save JSON, file locking, `findNext()`, `playEntry()` |
 | `php/tc.lib.php` | ~1,150 lines of functions: audio playback, volume/fade, bank holidays, file browser, ALSA device detection |
-| `php/cron.php` | Scheduler: checks `nextEventTime`, calls `playEntry()` if match |
+| `php/cron.php` | Scheduler: checks `nextEventTime`, calls `playEntry()` if match; also restarts the Live Audio listener if needed |
+| `php/liveaudio.php` | Live Audio listener (detached): receives a UDP stream on port 5555 and pipes it to mplayer |
 | `js/tc.js` | ~1,650-line jQuery SPA: playlist CRUD, UI rendering, AJAX, volume UI, elFinder integration |
 | `index.html` | Main UI shell |
 | `run.sh` | Docker entrypoint: symlinks, permissions, starts nginx/php-fpm/cron |
@@ -56,6 +59,8 @@ There is no build step — this is a ready-to-deploy web app with no package man
 - `playListDbDefault.JSON` — factory default template
 - `playListDb.lock` — file lock (40-second timeout) prevents race conditions
 - `scheduler_enabled` — flag file; scheduler only runs if this exists
+- `liveaudio_enabled` — flag file; Live Audio listener runs while this exists
+- `liveaudio.lock` / `liveaudio.pid` — held/written by the running listener; `liveaudio_receiving` exists while a stream is playing
 - `debug.log`, `played.log`, `cron.log` — logging
 
 ### Playlist JSON Shape
@@ -100,6 +105,10 @@ There is no build step — this is a ready-to-deploy web app with no package man
 - Logarithmic dB conversion in `tc.lib.php` for perceptually linear volume control
 - Chime files live in `Music/.system/` (FLAC format)
 - `getAudioDevices()` / `resolveAudioDevice()` handle device enumeration
+
+### Live Audio
+
+The Settings "Live Audio" toggle plays an audio stream (MPEG-TS, MP3, etc.) sent to `udp://<device>:5555`. `php/liveaudio.php` binds the port and pipes packets into `mplayer -demuxer lavf -` (mplayer's own demuxer probe hangs on real-time streams, and mplayer never exits when a UDP stream stops). While a stream is arriving it stops scheduled playback and `playEntry()` skips entries; 3 s without packets ends the stream. The listener holds an exclusive lock on `liveaudio.lock`, which is how `liveAudioRunning()` detects it. Code that kills "all mplayer" processes must exclude the listener (its command line contains `LIVEAUDIO_URL`).
 
 ### UK Bank Holiday Logic
 

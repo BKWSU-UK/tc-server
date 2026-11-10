@@ -247,6 +247,32 @@
             header('Content-Type: application/json');
         echo json_encode([date("F j, Y, g:i a", time ()), date_default_timezone_get ()]);
         break;
+          #Live Audio: play a UDP stream received on LIVEAUDIO_PORT
+          case 'liveAudioStatus':
+            header('Content-Type: application/json');
+            echo json_encode(getLiveAudioStatus());
+            break;
+          case 'setLiveAudio':
+            if (!clientInSameSubnet()) {
+              http_response_code(403);
+              header('Content-Type: application/json');
+              die(json_encode(['error' => 'Not allowed from WAN']));
+            }
+            if (!empty($_REQUEST['enabled']) && $_REQUEST['enabled'] !== 'false') {
+              checkDependencies();
+              file_put_contents(LIVEAUDIO_FLAG, date('c'));
+              chmod(LIVEAUDIO_FLAG, 0664);
+              ensureLiveAudio();
+              // Give the listener a moment to take its lock so the reply shows it running
+              for ($i = 0; $i < 20 && !liveAudioRunning(); $i++) {
+                usleep(100000);
+              }
+            } else {
+              stopLiveAudio();
+            }
+            header('Content-Type: application/json');
+            echo json_encode(getLiveAudioStatus());
+            break;
           case 'audioDevices':
             header('Content-Type: application/json');
             echo json_encode(getAudioDevices());

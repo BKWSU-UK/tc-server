@@ -109,6 +109,7 @@ const TC = (() => {
     $('.preview-mode-container').css('visibility', TC.system ? 'visible' : 'hidden');
     $('.mode-container').css('visibility', TC.lan ? 'visible' : 'hidden');
     $('.audio-device-container').css('display', TC.lan ? 'block' : 'none');
+    $('.live-audio-container').toggleClass('d-none', !TC.lan);
   };
 
   TC.renderPlaylistSelector = function () {
@@ -1049,6 +1050,9 @@ const TC = (() => {
           break;
         case 'audioDeviceSelect':
           break;
+        case 'liveAudioToggleButton':
+          TC.setLiveAudio($('#liveAudioToggleButton').prop('checked'));
+          break;
         default:
           prop = event.target.id.replace(/[\d]/g, '');
           index = event.target.id.replace(/[^\d]/g, '') - 1;
@@ -1667,6 +1671,47 @@ const TC = (() => {
     });
   };
   
+  //Live Audio: play a UDP stream sent to this device while switched on
+  TC.renderLiveAudio = function (status) {
+    if (!status || status.error) {
+      return;
+    }
+    $('#liveAudioToggleButton').prop('checked', status.enabled);
+    const $help = $('#liveAudioHelp');
+    if (!status.enabled) {
+      $help.hide();
+      return;
+    }
+    let html = 'Listening on <code>' + TC.escapeHtml(status.url) + '</code>';
+    if (status.receiving) {
+      html += '<br><span class="text-success fw-bold"><i class="bi bi-broadcast me-1"></i>Receiving live audio</span>';
+    }
+    $help.html(html).show();
+  };
+
+  TC.pollLiveAudio = function () {
+    if (!TC.lan || !TC.serverAvailable) {
+      return;
+    }
+    $.ajax({ url: 'php/tc.php?action=liveAudioStatus', dataType: 'json', timeout: 3000 })
+      .done(TC.renderLiveAudio);
+  };
+
+  TC.setLiveAudio = function (enabled) {
+    $.ajax({
+      url: 'php/tc.php',
+      method: 'POST',
+      data: { action: 'setLiveAudio', enabled: enabled ? 1 : 0 },
+      dataType: 'json',
+      timeout: 5000
+    })
+      .done(TC.renderLiveAudio)
+      .fail(function () {
+        console.error('Failed to switch Live Audio ' + (enabled ? 'on' : 'off'));
+        TC.pollLiveAudio();
+      });
+  };
+
   TC.init2 = function () {
     const currentTimeZone = moment.tz.guess();
 
@@ -1680,6 +1725,8 @@ const TC = (() => {
     TC.loaded = true;
     
     if (TC.lan) {
+      TC.pollLiveAudio();
+      setInterval(TC.pollLiveAudio, 2000);
       TC.loadAudioDevices();
       $('#audioDeviceSelect').on('change', function () {
         TC.setAudioDevice($(this).val());

@@ -6,6 +6,9 @@
   require_once('TrafficControl.class.php');
   $tc = new TrafficControl();
 
+  // Keep the Live Audio listener alive (e.g. after a reboot). Independent of the scheduler.
+  ensureLiveAudio();
+
   // Check if scheduler is enabled via flag file
   if (!file_exists(SYSTEMDIR . '/scheduler_enabled')) {
     exit(0);

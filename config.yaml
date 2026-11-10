@@ -18,6 +18,7 @@ panel_icon: mdi:traffic-light
 
 ports:
   8099/tcp: 8099
+  5555/udp: 5555
 
 map:
   - media:rw

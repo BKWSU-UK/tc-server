@@ -8,6 +8,8 @@ services:
       args:
         AUDIO_GID: ${AUDIO_GID:-29}
     container_name: tc-php
+    ports:
+      - "5555:5555/udp"   # Live Audio stream input
     devices:
       - /dev/snd:/dev/snd
     # Docker masks /proc/asound by default; getAudioDevices() reads it.

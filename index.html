@@ -28,7 +28,7 @@
     <link rel="stylesheet" type="text/css" media="screen" href="css/tc.css?v=20260323a">
     
     <!-- Local JS -->
-    <script src="js/tc.js?v=20260323a"></script>
+    <script src="js/tc.js?v=20261110a"></script>
     
     <script>
       $().ready(function() {
@@ -110,6 +110,18 @@
                       </label>
                       <span class="toggle-label ms-2">System</span>
                     </div>
+                  </div>
+                  <div class="toggle-container live-audio-container flex-wrap">
+                    <span class="small fw-bold text-muted">Live Audio</span>
+                    <div class="d-flex align-items-center">
+                      <span class="toggle-label me-2">Off</span>
+                      <label class="toggle-switch">
+                        <input id="liveAudioToggleButton" type="checkbox">
+                        <span class="toggle-slider"></span>
+                      </label>
+                      <span class="toggle-label ms-2">On</span>
+                    </div>
+                    <div id="liveAudioHelp" class="w-100 small text-muted mt-2" style="display:none;"></div>
                   </div>
                   <div class="audio-device-container">
                     <span class="small fw-bold text-muted d-flex align-items-center">

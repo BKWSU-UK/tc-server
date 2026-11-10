@@ -64,6 +64,13 @@ The `php` service in `docker-compose.yml` is set up for real ALSA playback throu
 
 If the host runs PipeWire or PulseAudio, it may hold some cards open, and playback to those cards fails with "device busy". Choose a different card in the app's audio device setting.
 
+## Live Audio
+
+UDP port 5555 is published, so with Live Audio switched on in Settings you can stream to the rig from the host, e.g.:
+```bash
+ffmpeg -re -i some-audio-file.ogg -c:a libmp3lame -b:a 128k -f mpegts udp://localhost:5555
+```
+
 ## Limitations
 
 - **Audio playback**: The host's sound cards are passed through to the PHP container, so playback is real (see [Audio](#audio)). On a host with no sound card, the app falls back to null audio output, which still exercises all playback logic without producing sound.

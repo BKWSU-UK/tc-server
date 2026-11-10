@@ -17,6 +17,13 @@
   define ( 'CHIME_END', '.system/Chime_end.flac');
   define ( 'DB_PER_VOL_UNIT', 0.46 );
   define ( 'OS_COMMANDS', 'bc|amixer|mplayer|bash');
+  // Live Audio: play an incoming UDP audio stream (see php/liveaudio.php)
+  define ( 'LIVEAUDIO_PORT', 5555);
+  define ( 'LIVEAUDIO_URL', 'udp://0.0.0.0:' . LIVEAUDIO_PORT);
+  define ( 'LIVEAUDIO_FLAG', SYSTEMDIR . '/' . 'liveaudio_enabled');
+  define ( 'LIVEAUDIO_LOCK', SYSTEMDIR . '/' . 'liveaudio.lock');
+  define ( 'LIVEAUDIO_PID', SYSTEMDIR . '/' . 'liveaudio.pid');
+  define ( 'LIVEAUDIO_RECEIVING', SYSTEMDIR . '/' . 'liveaudio_receiving');
   define ( 'NO_BUSYBOX_COMMAND', 'grep|date|ps');
   // PHP extensions the app relies on that are NOT bundled/enabled by default on
   // Alpine (separate phpXX-* packages) or Ubuntu: ctype (ctype_digit),
@@ -551,7 +558,7 @@ function calculateBankHolidays($yr) {
         $command = "(  sleep $howLong\n";
           if ($chime) {
           $chimeEnd = escapeshellarg(PLAYLISTDIR . '/' . CHIME_END);
-          $command .= "mplayer $chimeEnd $audioOutput -vo null";
+          $command .= "[ -f " . escapeshellarg(LIVEAUDIO_RECEIVING) . " ] || mplayer $chimeEnd $audioOutput -vo null";
         } elseif ($hasMixerControl) {
             //dash/bash script to wait for end to music then start fade then kill the music
             //Do not act if different id playing at time of end of song
@@ -1085,6 +1092,12 @@ function calculateBankHolidays($yr) {
 
     $entry = $stored->list[ $stored->selectedPlayList ]->list[$index];
 
+    // A live stream being received takes priority over everything else
+    if (liveAudioReceiving()) {
+      debugLog("Skipped entry $index: Live Audio stream is playing");
+      return 'nothing (Live Audio playing)';
+    }
+
     $id = (string)((int)str_replace('.','',microtime(true)) % 4096);
 
     if (strToLower($entry->what) === 'chime') {
@@ -1114,7 +1127,7 @@ function calculateBankHolidays($yr) {
     $oldId = exec( 'ps aux | grep -F -v grep | grep -F mplayer | grep -P -o "sid [0-9]+ -x [0-9]+$" | tr -cd "0-9\-"' );
     //Kill any previously playing instance
     if (strlen($oldId) > 1) {
-      exec( 'kill $( ps aux | grep -F -v grep | grep -F mplayer | awk \'{print $2}\' )' );
+      exec( 'kill $( ps aux | grep -F -v grep | grep -F mplayer | grep -F -v -- ' . escapeshellarg(LIVEAUDIO_URL) . ' | awk \'{print $2}\' )' );
     }
     $audioOutput = getMplayerAudioOutput();
     $chime = str_ends_with($entry->whatSelectedRemote, CHIME_START);
@@ -1166,7 +1179,7 @@ function calculateBankHolidays($yr) {
     $isMapped = getIsMapped();
     //Kill player if found
     if (strlen($oldId) > 1) {
-      exec( 'kill $( ps aux | grep -F -v grep | grep -F mplayer | awk \'{print $2}\' )' );
+      exec( 'kill $( ps aux | grep -F -v grep | grep -F mplayer | grep -F -v -- ' . escapeshellarg(LIVEAUDIO_URL) . ' | awk \'{print $2}\' )' );
       //Restore initial level if known
       $initialLevel = -1;
       prepareMixer ($oldId, $devCardInfo, $controlId, $initialLevel, $isMapped);
@@ -1238,6 +1251,89 @@ function calculateBankHolidays($yr) {
   function errorLog(Throwable $e) {
     $logEntry = 'File : ' . $e->getFile() . ', Line : ' . $e->getLine() . ', Message : ' . $e->getMessage() . "\n";
     file_put_contents(DEBUGLOG, $logEntry, FILE_APPEND);
+  }
+
+  // ---- Live Audio -------------------------------------------------------
+  // php/liveaudio.php runs as a detached background process while the
+  // LIVEAUDIO_FLAG file exists. It holds an exclusive lock on LIVEAUDIO_LOCK
+  // for its lifetime, so "is the lock held?" tells us whether it is running.
+
+  function liveAudioEnabled(): bool {
+    return file_exists(LIVEAUDIO_FLAG);
+  }
+
+  function liveAudioRunning(): bool {
+    $handle = @fopen(LIVEAUDIO_LOCK, 'c');
+    if (!$handle) {
+      return false;
+    }
+    $free = flock($handle, LOCK_EX | LOCK_NB);
+    if ($free) {
+      flock($handle, LOCK_UN);
+    }
+    fclose($handle);
+    return !$free;
+  }
+
+  function liveAudioReceiving(): bool {
+    return file_exists(LIVEAUDIO_RECEIVING) && liveAudioRunning();
+  }
+
+  // Start the listener if Live Audio is enabled and it is not already running.
+  // Called when the UI switches Live Audio on and from cron every minute, so
+  // the listener comes back after a reboot or crash.
+  function ensureLiveAudio(): void {
+    if (!liveAudioEnabled() || liveAudioRunning()) {
+      return;
+    }
+    @unlink(LIVEAUDIO_RECEIVING);
+    exec('nohup setsid php ' . escapeshellarg(__DIR__ . '/liveaudio.php') . ' >/dev/null 2>&1 </dev/null &');
+    debugLog('Live Audio listener started');
+  }
+
+  // Kill any Live Audio mplayer processes (the main process and its cache child)
+  function killLiveAudioPlayers(): void {
+    exec('kill $( ps aux | grep -F -v grep | grep -F mplayer | grep -F -- ' . escapeshellarg(LIVEAUDIO_URL) . ' | awk \'{print $2}\' ) 2>/dev/null');
+  }
+
+  function stopLiveAudio(): void {
+    @unlink(LIVEAUDIO_FLAG);
+    if (liveAudioRunning()) {
+      // The listener was started with setsid, so its PID is also its process
+      // group ID: kill the listener and its mplayer children in one go.
+      $pid = (int)@file_get_contents(LIVEAUDIO_PID);
+      if ($pid > 1) {
+        exec('kill -TERM -' . $pid . ' 2>/dev/null');
+      }
+    }
+    killLiveAudioPlayers();
+    @unlink(LIVEAUDIO_PID);
+    @unlink(LIVEAUDIO_RECEIVING);
+    debugLog('Live Audio stopped');
+  }
+
+  // Address a sender should stream to. On bare metal, use this device's primary
+  // LAN IPv4 address. In a container that address is internal and unreachable,
+  // so use the host name or IP the browser used to reach this page.
+  function liveAudioAddress(): string {
+    if (!file_exists('/.dockerenv')) {
+      $ip = trim((string)exec("ip -4 route get 1.1.1.1 2>/dev/null | grep -o 'src [0-9.]*' | cut -d' ' -f2"));
+      if (filter_var($ip, FILTER_VALIDATE_IP)) {
+        return $ip;
+      }
+    }
+    $host = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_ADDR'] ?? '');
+    $host = preg_replace('/:\d+$/', '', $host);
+    return $host !== '' ? $host : '<this device>';
+  }
+
+  function getLiveAudioStatus(): array {
+    return [
+      'enabled' => liveAudioEnabled(),
+      'running' => liveAudioRunning(),
+      'receiving' => liveAudioReceiving(),
+      'url' => 'udp://' . liveAudioAddress() . ':' . LIVEAUDIO_PORT
+    ];
   }
 
   function updateCronJob($enabled) {
