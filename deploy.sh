@@ -14,12 +14,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Git source for the deployed app. The repo is public, so no auth is needed.
 # Override via environment if deploying a fork/branch:
-#   TC_REPO_URL=... TC_BRANCH=... sudo -E bash deploy.sh
+#   TC_REPO_URL=... TC_BRANCH=... sudo -E bash deploy.sh   (Debian)
+#   TC_REPO_URL=... TC_BRANCH=... sh deploy.sh             (Alpine, as root)
 REPO_URL="${TC_REPO_URL:-https://github.com/BKWSU-UK/tc-server.git}"
 BRANCH="${TC_BRANCH:-main}"
 
 # Persistent storage for diskless mode (Alpine on Raspberry Pi)
-# Override via environment: TC_DATA_DIR=/mnt/data sudo -E bash deploy.sh
+# Override via environment (as root): TC_DATA_DIR=/mnt/data sh deploy.sh
 DATA_DIR="${TC_DATA_DIR:-}"
 
 # Detect OS (Alpine/Debian) and load per-distro paths, users and helpers.
@@ -162,7 +163,7 @@ if [ "$DISKLESS_MODE" = true ]; then
         echo "Diskless mode detected. Persistent storage is required for .tcsys and Music."
         echo "Common locations: /mnt/data, /media/usb, /srv/data"
         echo "Set TC_DATA_DIR environment variable to specify location, e.g.:"
-        echo "  TC_DATA_DIR=/mnt/data sudo -E bash deploy.sh"
+        echo "  TC_DATA_DIR=/mnt/data sh deploy.sh"
         echo ""
         # Try common locations
         for loc in /mnt/data /media/usb /srv/data; do
