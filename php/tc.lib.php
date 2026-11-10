@@ -398,8 +398,8 @@ function calculateBankHolidays($yr) {
   function getMplayerAudioOutput() {
     global $stored;
 
-    // Detect Docker environment and force null audio output for testing
-    if (file_exists('/.dockerenv')) {
+    // No sound card available (e.g. a container without /dev/snd): use null output
+    if (getCardNum() === -1) {
       return '-ao null';
     }
 
