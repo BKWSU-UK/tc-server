@@ -408,11 +408,6 @@ function calculateBankHolidays($yr) {
   function getMplayerAudioOutput() {
     global $stored;
 
-    // No sound card available (e.g. a container without /dev/snd): use null output
-    if (getCardNum() === -1) {
-      return '-ao null';
-    }
-
     $selectedDevice = (isset($stored) && is_object($stored) && property_exists($stored, 'audioDevice'))
                       ? $stored->audioDevice : 'auto';
     $selectedDevice = resolveAudioDevice($selectedDevice);
@@ -421,6 +416,12 @@ function calculateBankHolidays($yr) {
     // '-D bluealsa' mixer device that getDevCardInfo() uses for volume.
     if (strpos($selectedDevice, 'bluetooth:') === 0) {
       return '-ao alsa:device=bluealsa';
+    }
+
+    // No sound card available (e.g. a container without /dev/snd): use null output.
+    // Checked after Bluetooth, because BlueALSA devices are not listed by aplay -l.
+    if (getCardNum() === -1) {
+      return '-ao null';
     }
 
     // Check if PulseAudio/PipeWire is available via the current process's session
