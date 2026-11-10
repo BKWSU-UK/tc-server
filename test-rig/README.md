@@ -51,9 +51,22 @@ For application code changes (PHP, JS, HTML, CSS), the volume mount means change
 - **Nginx Container**: Serves the web application and proxies PHP requests to PHP-FPM via Unix socket
 - **Shared Volume**: The application code is mounted from the parent directory, allowing live code editing
 
+## Audio
+
+The `php` service in `docker-compose.yml` is set up for real ALSA playback through the host's sound hardware:
+
+- `devices: /dev/snd` passes the host's sound devices into the container.
+- `security_opt: systempaths=unconfined` unmasks `/proc/asound`, which Docker hides by default. The app reads `/proc/asound/cards` to list audio devices. This loosens the container's isolation slightly, which is acceptable for a local test rig.
+- The Dockerfile adds `www-data` to a group whose GID matches the host's `audio` group, so PHP-FPM workers can open the devices. The GID comes from the `AUDIO_GID` build argument (default `29`, the Debian/Ubuntu value). If your host differs, rebuild with:
+  ```bash
+  AUDIO_GID=$(getent group audio | cut -d: -f3) docker compose build
+  ```
+
+If the host runs PipeWire or PulseAudio, it may hold some cards open, and playback to those cards fails with "device busy". Choose a different card in the app's audio device setting.
+
 ## Limitations
 
-- **Audio playback**: mplayer runs with `-ao null` (null audio output) in the Docker environment. This allows testing all playback logic (file selection, duration tracking, chime scheduling) without requiring audio hardware. No actual sound will be produced.
+- **Audio playback**: The host's sound cards are passed through to the PHP container, so playback is real (see [Audio](#audio)). On a host with no sound card, the app falls back to null audio output, which still exercises all playback logic without producing sound.
 - The test rig uses Alpine Linux; production may use Debian
 - No cron/scheduler is configured in this test rig (manual testing only)
 

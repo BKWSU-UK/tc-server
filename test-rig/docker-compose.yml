@@ -5,7 +5,14 @@ services:
     build:
       context: ..
       dockerfile: test-rig/Dockerfile
+      args:
+        AUDIO_GID: ${AUDIO_GID:-29}
     container_name: tc-php
+    devices:
+      - /dev/snd:/dev/snd
+    # Docker masks /proc/asound by default; getAudioDevices() reads it.
+    security_opt:
+      - systempaths=unconfined
     volumes:
       - ../:/var/www/html
       - php-socket:/run/php

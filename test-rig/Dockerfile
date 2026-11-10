@@ -34,6 +34,16 @@ RUN mkdir -p .tcsys && \
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html
 
+# Give www-data access to the host's /dev/snd devices (passed through in
+# docker-compose.yml). AUDIO_GID must match the host's audio group GID.
+ARG AUDIO_GID=29
+RUN if getent group "$AUDIO_GID" >/dev/null; then \
+      grp=$(getent group "$AUDIO_GID" | cut -d: -f1); \
+    else \
+      addgroup -g "$AUDIO_GID" hostaudio && grp=hostaudio; \
+    fi && \
+    addgroup www-data "$grp"
+
 # Configure PHP
 RUN echo "date.timezone = UTC" > /usr/local/etc/php/conf.d/timezone.ini
 
