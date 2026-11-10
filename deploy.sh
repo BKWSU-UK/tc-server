@@ -276,6 +276,14 @@ else
         echo "Disabling default nginx site..."
         $SUDO rm /etc/nginx/sites-enabled/default
     fi
+    # /var/log may be a tmpfs that starts empty at boot (e.g. DietPi RAMlog), and
+    # nginx refuses to start without /var/log/nginx. Have systemd create it before
+    # every start; also create it now so 'nginx -t' below can open its logs.
+    $SUDO mkdir -p /etc/systemd/system/nginx.service.d
+    printf '[Service]\nLogsDirectory=nginx\n' | \
+        $SUDO tee /etc/systemd/system/nginx.service.d/logsdir.conf > /dev/null
+    $SUDO systemctl daemon-reload
+    $SUDO mkdir -p /var/log/nginx
 fi
 rm -f "$TMP_CONF"
 
@@ -332,7 +340,8 @@ if [ "$TC_OS" = "alpine" ]; then
     $SUDO rc-service nginx restart
     $SUDO rc-service "$CRON_DAEMON" restart 2>/dev/null || true
 else
-    $SUDO systemctl reload nginx
+    # reload-or-restart: a plain reload fails if nginx isn't running
+    $SUDO systemctl reload-or-restart nginx
     $SUDO systemctl restart "php${TC_PHP_DOT}-fpm"
 fi
 
