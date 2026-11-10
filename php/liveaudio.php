@@ -32,6 +32,16 @@
   }
   file_put_contents(LIVEAUDIO_PID, getmypid());
 
+  // Command FIFO for mplayer. We keep it open read-write ourselves so mplayer
+  // never sees end-of-file when a writer (setLiveAudioVolume()) closes it.
+  @unlink(LIVEAUDIO_FIFO);
+  if (function_exists('posix_mkfifo')) {
+    posix_mkfifo(LIVEAUDIO_FIFO, 0660);
+  } else {
+    exec('mkfifo -m 660 ' . escapeshellarg(LIVEAUDIO_FIFO));
+  }
+  $fifoHandle = @fopen(LIVEAUDIO_FIFO, 'r+e');
+
   $stored = null;
   $audioOutput = '';
   $settingsLoadedAt = 0;
@@ -66,7 +76,13 @@
     // can find these processes; mplayer reads the stream from stdin ('-').
     // -demuxer lavf: mplayer's own format probing never completes on a real-time
     // stream (it waits forever with "Cache empty"); libavformat's does.
-    $command = 'exec mplayer -quiet -cache 256 -demuxer lavf ' . $audioOutput . ' -vo null -title ' . escapeshellarg(LIVEAUDIO_URL) . ' -';
+    // -softvol: volume is applied in software, so it works the same on ALSA and
+    // PulseAudio and leaves the hardware mixer level used by playlist entries alone.
+    // -input file: volume changes from the UI arrive through LIVEAUDIO_FIFO.
+    $command = 'exec mplayer -quiet -cache 256 -demuxer lavf ' . $audioOutput . ' -vo null'
+      . ' -softvol -softvol-max 100 -volume ' . liveAudioGain(getLiveAudioVolume())
+      . ' -input file=' . escapeshellarg(LIVEAUDIO_FIFO)
+      . ' -title ' . escapeshellarg(LIVEAUDIO_URL) . ' -';
     $process = proc_open($command, [0 => ['pipe', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);
     if (!is_resource($process)) {
       debugLog('Live Audio: failed to start mplayer');
@@ -151,6 +167,10 @@
     fclose($socket);
   }
 
+  if ($fifoHandle) {
+    fclose($fifoHandle);
+  }
+  @unlink(LIVEAUDIO_FIFO);
   @unlink(LIVEAUDIO_RECEIVING);
   @unlink(LIVEAUDIO_PID);
   debugLog('Live Audio: listener exited');

@@ -28,7 +28,7 @@
     <link rel="stylesheet" type="text/css" media="screen" href="css/tc.css?v=20260323a">
     
     <!-- Local JS -->
-    <script src="js/tc.js?v=20261110a"></script>
+    <script src="js/tc.js?v=20261110b"></script>
     
     <script>
       $().ready(function() {
@@ -122,6 +122,13 @@
                       <span class="toggle-label ms-2">On</span>
                     </div>
                     <div id="liveAudioHelp" class="w-100 small text-muted mt-2" style="display:none;"></div>
+                    <div id="liveAudioVolumeControl" class="w-100 mt-2" style="display:none;">
+                      <div class="volume-control">
+                        <i class="bi bi-volume-down text-muted" title="Live Audio volume"></i>
+                        <input id="liveAudioVolume" type="range" min="0" max="99" value="80" class="volume-slider live-audio-volume" title="Live Audio volume">
+                        <span id="liveAudioVolumeDisplay" class="volume-display">80</span>
+                      </div>
+                    </div>
                   </div>
                   <div class="audio-device-container">
                     <span class="small fw-bold text-muted d-flex align-items-center">

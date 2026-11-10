@@ -273,6 +273,16 @@
             header('Content-Type: application/json');
             echo json_encode(getLiveAudioStatus());
             break;
+          case 'setLiveAudioVolume':
+            if (!clientInSameSubnet()) {
+              http_response_code(403);
+              header('Content-Type: application/json');
+              die(json_encode(['error' => 'Not allowed from WAN']));
+            }
+            setLiveAudioVolume((int)($_REQUEST['volume'] ?? LIVEAUDIO_DEFAULT_VOLUME));
+            header('Content-Type: application/json');
+            echo json_encode(getLiveAudioStatus());
+            break;
           case 'audioDevices':
             header('Content-Type: application/json');
             echo json_encode(getAudioDevices());

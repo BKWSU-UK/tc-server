@@ -108,7 +108,7 @@ There is no build step — this is a ready-to-deploy web app with no package man
 
 ### Live Audio
 
-The Settings "Live Audio" toggle plays an audio stream (MPEG-TS, MP3, etc.) sent to `udp://<device>:5555`. `php/liveaudio.php` binds the port and pipes packets into `mplayer -demuxer lavf -` (mplayer's own demuxer probe hangs on real-time streams, and mplayer never exits when a UDP stream stops). While a stream is arriving it stops scheduled playback and `playEntry()` skips entries; 3 s without packets ends the stream. The listener holds an exclusive lock on `liveaudio.lock`, which is how `liveAudioRunning()` detects it. Code that kills "all mplayer" processes must exclude the listener (its command line contains `LIVEAUDIO_URL`).
+The Settings "Live Audio" toggle plays an audio stream (MPEG-TS, MP3, etc.) sent to `udp://<device>:5555`. `php/liveaudio.php` binds the port and pipes packets into `mplayer -demuxer lavf -` (mplayer's own demuxer probe hangs on real-time streams, and mplayer never exits when a UDP stream stops). While a stream is arriving it stops scheduled playback and `playEntry()` skips entries; 3 s without packets ends the stream. The listener holds an exclusive lock on `liveaudio.lock`, which is how `liveAudioRunning()` detects it. Code that kills "all mplayer" processes must exclude the listener (its command line contains `LIVEAUDIO_URL`). Its volume (0–99, stored in `.tcsys/liveaudio_volume`) is applied with mplayer `-softvol`, using the same dB curve as entries; changes during a stream go to mplayer as slave commands via the `liveaudio.fifo` FIFO.
 
 ### UK Bank Holiday Logic
 

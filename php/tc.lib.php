@@ -24,6 +24,9 @@
   define ( 'LIVEAUDIO_LOCK', SYSTEMDIR . '/' . 'liveaudio.lock');
   define ( 'LIVEAUDIO_PID', SYSTEMDIR . '/' . 'liveaudio.pid');
   define ( 'LIVEAUDIO_RECEIVING', SYSTEMDIR . '/' . 'liveaudio_receiving');
+  define ( 'LIVEAUDIO_VOLUME', SYSTEMDIR . '/' . 'liveaudio_volume');
+  define ( 'LIVEAUDIO_FIFO', SYSTEMDIR . '/' . 'liveaudio.fifo');  // mplayer slave commands
+  define ( 'LIVEAUDIO_DEFAULT_VOLUME', 80);
   define ( 'NO_BUSYBOX_COMMAND', 'grep|date|ps');
   // PHP extensions the app relies on that are NOT bundled/enabled by default on
   // Alpine (separate phpXX-* packages) or Ubuntu: ctype (ctype_digit),
@@ -1309,6 +1312,7 @@ function calculateBankHolidays($yr) {
     killLiveAudioPlayers();
     @unlink(LIVEAUDIO_PID);
     @unlink(LIVEAUDIO_RECEIVING);
+    @unlink(LIVEAUDIO_FIFO);
     debugLog('Live Audio stopped');
   }
 
@@ -1327,9 +1331,37 @@ function calculateBankHolidays($yr) {
     return $host !== '' ? $host : '<this device>';
   }
 
+  // Live Audio volume on the same 0-99 scale as playlist entries
+  function getLiveAudioVolume(): int {
+    $volume = @file_get_contents(LIVEAUDIO_VOLUME);
+    return is_numeric($volume) ? max(0, min(99, (int)$volume)) : LIVEAUDIO_DEFAULT_VOLUME;
+  }
+
+  // mplayer -softvol level (linear gain %, 100 = unchanged) for a 0-99 volume,
+  // using the same dB curve as the ALSA mixer volume for playlist entries
+  function liveAudioGain(int $volume): float {
+    return ($volume <= 0) ? 0 : round(100 * pow(10, voltoDb($volume) / 20), 1);
+  }
+
+  function setLiveAudioVolume(int $volume): void {
+    $volume = max(0, min(99, $volume));
+    file_put_contents(LIVEAUDIO_VOLUME, (string)$volume);
+    // Adjust a playing stream through mplayer's command FIFO. 'r+' never blocks
+    // on a FIFO (unlike 'w', which waits for a reader).
+    if (liveAudioReceiving() && @filetype(LIVEAUDIO_FIFO) === 'fifo') {
+      $fifo = @fopen(LIVEAUDIO_FIFO, 'r+');
+      if ($fifo) {
+        stream_set_blocking($fifo, false);
+        fwrite($fifo, 'volume ' . liveAudioGain($volume) . " 1\n");
+        fclose($fifo);
+      }
+    }
+  }
+
   function getLiveAudioStatus(): array {
     return [
       'enabled' => liveAudioEnabled(),
+      'volume' => getLiveAudioVolume(),
       'running' => liveAudioRunning(),
       'receiving' => liveAudioReceiving(),
       'url' => 'udp://' . liveAudioAddress() . ':' . LIVEAUDIO_PORT

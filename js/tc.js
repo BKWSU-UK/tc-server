@@ -214,7 +214,7 @@ const TC = (() => {
 
   TC.attachItemEventHandlers = function () {
     //Volume slider events — delegated so re-attachment on every render is not needed
-    $(document).on('input', '.volume-slider', function (e) {
+    $(document).on('input', '.volume-slider:not(.live-audio-volume)', function (e) {
       const volControl = $(this);
       const index = volControl[0].id.replace(/[^\d]/g, '') - 1;
       const value = parseInt(volControl.val());
@@ -1053,6 +1053,8 @@ const TC = (() => {
         case 'liveAudioToggleButton':
           TC.setLiveAudio($('#liveAudioToggleButton').prop('checked'));
           break;
+        case 'liveAudioVolume':
+          break;  // Handled by TC.bindLiveAudioVolume()
         default:
           prop = event.target.id.replace(/[\d]/g, '');
           index = event.target.id.replace(/[^\d]/g, '') - 1;
@@ -1680,8 +1682,15 @@ const TC = (() => {
     const $help = $('#liveAudioHelp');
     if (!status.enabled) {
       $help.hide();
+      $('#liveAudioVolumeControl').hide();
       return;
     }
+    // Don't fight the user: ignore polled volume while they are adjusting it
+    if (status.volume !== undefined && Date.now() - TC.liveAudioVolumeTouched > 3000) {
+      $('#liveAudioVolume').val(status.volume);
+      $('#liveAudioVolumeDisplay').text(status.volume);
+    }
+    $('#liveAudioVolumeControl').show();
     let html = 'Listening on <code>' + TC.escapeHtml(status.url) + '</code>';
     if (status.receiving) {
       html += '<br><span class="text-success fw-bold"><i class="bi bi-broadcast me-1"></i>Receiving live audio</span>';
@@ -1695,6 +1704,39 @@ const TC = (() => {
     }
     $.ajax({ url: 'php/tc.php?action=liveAudioStatus', dataType: 'json', timeout: 3000 })
       .done(TC.renderLiveAudio);
+  };
+
+  TC.liveAudioVolumeTouched = 0;
+
+  TC.sendLiveAudioVolume = function () {
+    clearTimeout(TC.liveAudioVolumeTimer);
+    TC.liveAudioVolumeTimer = setTimeout(function () {
+      $.ajax({
+        url: 'php/tc.php',
+        method: 'POST',
+        data: { action: 'setLiveAudioVolume', volume: $('#liveAudioVolume').val() },
+        timeout: 5000
+      }).fail(function () {
+        console.error('Failed to set Live Audio volume');
+      });
+    }, 150);
+  };
+
+  TC.bindLiveAudioVolume = function () {
+    const $slider = $('#liveAudioVolume');
+    $slider.on('input', function () {
+      TC.liveAudioVolumeTouched = Date.now();
+      $('#liveAudioVolumeDisplay').text($slider.val());
+      TC.sendLiveAudioVolume();
+    });
+    $('#liveAudioVolumeControl').on('wheel', function (e) {
+      e.preventDefault();
+      const value = Math.max(0, Math.min(99, parseInt($slider.val()) + (e.originalEvent.deltaY < 0 ? 1 : -1)));
+      TC.liveAudioVolumeTouched = Date.now();
+      $slider.val(value);
+      $('#liveAudioVolumeDisplay').text(value);
+      TC.sendLiveAudioVolume();
+    });
   };
 
   TC.setLiveAudio = function (enabled) {
@@ -1725,6 +1767,7 @@ const TC = (() => {
     TC.loaded = true;
     
     if (TC.lan) {
+      TC.bindLiveAudioVolume();
       TC.pollLiveAudio();
       setInterval(TC.pollLiveAudio, 2000);
       TC.loadAudioDevices();
