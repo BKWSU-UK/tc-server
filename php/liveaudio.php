@@ -76,10 +76,13 @@
     // can find these processes; mplayer reads the stream from stdin ('-').
     // -demuxer lavf: mplayer's own format probing never completes on a real-time
     // stream (it waits forever with "Cache empty"); libavformat's does.
+    // -afm ffmpeg,: prefer FFmpeg's decoders. mplayer's mpg123 decoder glitches on
+    // MP3 packets from the libavformat MPEG-TS demuxer (e.g. ffmpeg -f mpegts);
+    // the trailing comma falls back to other decoders for formats FFmpeg can't do.
     // -softvol: volume is applied in software, so it works the same on ALSA and
     // PulseAudio and leaves the hardware mixer level used by playlist entries alone.
     // -input file: volume changes from the UI arrive through LIVEAUDIO_FIFO.
-    $command = 'exec mplayer -quiet -cache 256 -demuxer lavf ' . $audioOutput . ' -vo null'
+    $command = 'exec mplayer -quiet -cache 256 -demuxer lavf -afm ffmpeg, ' . $audioOutput . ' -vo null'
       . ' -softvol -softvol-max 100 -volume ' . liveAudioGain(getLiveAudioVolume())
       . ' -input file=' . escapeshellarg(LIVEAUDIO_FIFO)
       . ' -title ' . escapeshellarg(LIVEAUDIO_URL) . ' -';
