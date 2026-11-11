@@ -348,16 +348,19 @@ $SUDO nginx -t
 # 8. Set up the scheduler cron job
 echo "Setting up cron job..."
 if [ "$TC_OS" = "alpine" ]; then
-    # Detect which cron daemon is installed (prefer dcron over busybox crond)
-    if command -v dcron >/dev/null 2>&1; then
+    # Pick the cron service. The dcron package replaces /usr/sbin/crond with
+    # Dillon's cron, but BusyBox's "crond" service may still be enabled; it
+    # starts that binary with BusyBox options and it dies at once, so no job
+    # ever runs. When dcron is installed, use its own service and turn the
+    # BusyBox one off (both read /etc/crontabs).
+    if [ -x /etc/init.d/dcron ]; then
         CRON_DAEMON="dcron"
-    elif command -v crond >/dev/null 2>&1 && [ -f /sbin/crond ]; then
-        CRON_DAEMON="crond"
+        $SUDO rc-service crond stop >/dev/null 2>&1 || true
+        $SUDO rc-update del crond default >/dev/null 2>&1 || true
     else
-        # Default to busybox crond (built into Alpine)
-        CRON_DAEMON="crond"
+        CRON_DAEMON="crond"   # BusyBox crond, built into Alpine
     fi
-    echo "Using cron daemon: $CRON_DAEMON"
+    echo "Using cron service: $CRON_DAEMON"
 
     # BusyBox/dcron reads per-user crontabs from /etc/crontabs/<user> (no user field)
     $SUDO mkdir -p /etc/crontabs
@@ -643,6 +646,12 @@ if [ "$TC_OS" = "alpine" ]; then
         $SUDO rc-service php-fpm restart 2>/dev/null || true
     $SUDO rc-service nginx restart
     $SUDO rc-service "$CRON_DAEMON" restart 2>/dev/null || true
+    # Without cron nothing is scheduled, so say so loudly.
+    sleep 2
+    if ! $SUDO rc-service "$CRON_DAEMON" status >/dev/null 2>&1; then
+        echo "WARNING: the cron service ($CRON_DAEMON) is not running, so scheduled events will not play."
+        echo "         Check it with: rc-service $CRON_DAEMON status"
+    fi
 else
     # reload-or-restart: a plain reload fails if nginx isn't running
     $SUDO systemctl reload-or-restart nginx
