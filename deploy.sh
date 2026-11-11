@@ -542,9 +542,25 @@ fi
 #     card, or an existing dtparam=audio line, is left alone.
 PI_MODEL="$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)"
 BOOT_ID="$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || true)"
+HAS_SOUND_CARD() { grep -qE '^ *[0-9]+ \[' /proc/asound/cards 2>/dev/null; }
 case "$PI_MODEL" in
     *"Raspberry Pi"*)
-        if ! grep -qE '^ *[0-9]+ \[' /proc/asound/cards 2>/dev/null; then
+        # The onboard audio driver isn't always loaded automatically (Alpine's
+        # mdev doesn't autoload it). Try it, and load it at every boot if it
+        # brings up a sound card.
+        if ! HAS_SOUND_CARD && $SUDO modprobe snd_bcm2835 2>/dev/null; then
+            sleep 1
+            if HAS_SOUND_CARD; then
+                echo "Loaded the Raspberry Pi audio driver (snd_bcm2835); loading it at boot from now on"
+                if [ "$TC_OS" = "alpine" ]; then
+                    grep -qx 'snd_bcm2835' /etc/modules 2>/dev/null || \
+                        echo 'snd_bcm2835' | $SUDO tee -a /etc/modules > /dev/null
+                else
+                    echo 'snd_bcm2835' | $SUDO tee /etc/modules-load.d/trafficcontrol-audio.conf > /dev/null
+                fi
+            fi
+        fi
+        if ! HAS_SOUND_CARD; then
             PI_CFG=""
             for f in /boot/firmware/config.txt /boot/config.txt; do
                 if [ -f "$f" ]; then PI_CFG="$f"; break; fi
@@ -589,6 +605,7 @@ esac
 #     hands them to the app user every minute; see the script for the
 #     safeguards that make running it as root safe.
 echo "Installing the Music ownership fixer..."
+$SUDO mkdir -p /usr/local/sbin    # not present on a minimal Alpine install
 $SUDO install -o root -g root -m 0755 "$DEST_DIR/scripts/tc-fix-music-ownership.sh" \
     /usr/local/sbin/tc-fix-music-ownership
 # Its safeguards need the kernel's hardlink/symlink protections. They are on
