@@ -659,6 +659,22 @@ else
 fi
 
 
+# The Live Audio listener is a long-running PHP process, so it keeps running
+# the code it started with. Stop it (it was started with setsid, so its PID is
+# its process group, which includes its mplayer); while Live Audio is on, cron
+# starts it again with the updated code within a minute. The PID file is
+# writable by the app user, so only act on a PID that really is the listener.
+LA_PID="$(cat "$DEST_DIR/.tcsys/liveaudio.pid" 2>/dev/null || true)"
+case "$LA_PID" in
+    ''|*[!0-9]*) ;;
+    *)
+        if [ "$LA_PID" -gt 1 ] && tr '\0' ' ' < "/proc/$LA_PID/cmdline" 2>/dev/null | grep -q 'php/liveaudio\.php'; then
+            echo "Restarting the Live Audio listener so it runs the updated code (back within a minute)..."
+            $SUDO kill -TERM -"$LA_PID" 2>/dev/null || $SUDO kill -TERM "$LA_PID" 2>/dev/null || true
+        fi
+        ;;
+esac
+
 echo ""
 echo "Deployment complete."
 echo ""
