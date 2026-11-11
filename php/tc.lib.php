@@ -762,7 +762,14 @@ function calculateBankHolidays($yr) {
 
     $playList = $stored->list[ $stored->selectedPlayList ];
     $entry = $playList->list[$index];
-    $phash = $entry->hash;
+    // List the folder the entry names. Its stored elFinder hash should
+    // encode the same path; if it doesn't (old or mismatched data), the
+    // path wins, otherwise tracks would be chosen from another folder.
+    $phash = fmPathHash((string)$entry->what);
+    if (($entry->hash ?? '') !== $phash) {
+      debugLog("Entry $index: hash didn't match folder \"{$entry->what}\"; corrected");
+      $entry->hash = $phash;
+    }
 
     $found = false;
 
@@ -966,8 +973,15 @@ function calculateBankHolidays($yr) {
       $entry->hashSelectedRemote = 'null';
     } else {
       if ($entry->mime === 'directory') {
-        //If no selection made from last run then create an initial selection
-        if (is_object($entry) && (!property_exists($entry, 'whatSelectedRemote') || ($entry->whatSelectedRemote === '')))  {
+        // Use the track picked last time, unless there is none, or it isn't
+        // in this folder (e.g. the entry now uses a different folder) or no
+        // longer exists: then pick one from the folder now.
+        $selected = (string)($entry->whatSelectedRemote ?? '');
+        $folder = rtrim((string)$entry->what, '/') . '/';
+        if ($selected === '' || strpos($selected, $folder) !== 0 || !is_file(PLAYLISTDIR . '/' . $selected)) {
+          if ($selected !== '') {
+            debugLog("Entry $index: next track \"$selected\" is not in \"{$entry->what}\" or is missing; choosing again");
+          }
           directorySelect($index);
         }
       } else {
@@ -975,10 +989,18 @@ function calculateBankHolidays($yr) {
       }
     }
 
-    // Prevent directory traversal
+    // Play only existing files inside Music (prevents directory traversal)
     $realPlaylistDir = realpath(PLAYLISTDIR);
+    if (($entry->whatSelectedRemote ?? '') === '') {
+        debugLog("Entry $index: nothing to play in \"{$entry->what}\" (empty folder, or no playable files)");
+        return 'nothing';
+    }
     $requestedFile = realpath(PLAYLISTDIR . '/' . $entry->whatSelectedRemote);
-    if ($requestedFile === false || strpos($requestedFile, $realPlaylistDir) !== 0) {
+    if ($requestedFile === false) {
+        debugLog("Entry $index: file not found: " . $entry->whatSelectedRemote);
+        return 'nothing';
+    }
+    if (strpos($requestedFile, $realPlaylistDir . '/') !== 0) {
         debugLog("Directory traversal attempt blocked: " . $entry->whatSelectedRemote);
         return 'nothing';
     }

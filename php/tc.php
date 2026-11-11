@@ -52,9 +52,12 @@
                   }
                 }
               }
-              //Item specific
+              //Item specific. Entries are matched by position, which shifts
+              //when rows are added, removed or sorted, so only keep the
+              //server's selection if the entry still uses the same file/folder.
               foreach ($playList->list as $j => $playListItem) {
-                    if (isset($newStore->list[$i]->list) && array_key_exists($j, $newStore->list[$i]->list)) {
+                    if (isset($newStore->list[$i]->list) && array_key_exists($j, $newStore->list[$i]->list)
+                        && ($newStore->list[$i]->list[$j]->what ?? null) === ($playListItem->what ?? null)) {
                   if (property_exists($playListItem, 'whatSelectedRemote')) {
                         $newStore->list[$i]->list[$j]->whatSelectedRemote = $playListItem->whatSelectedRemote;
                   }
