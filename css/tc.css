@@ -904,3 +904,81 @@ audio::-webkit-media-controls-panel {
   margin: 0;
   font-size: 0.9rem;
 }
+
+/* ---- Music file manager ---- */
+.fm-main {
+  display: flex;
+  min-height: 45vh;
+}
+.fm-list {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.fm-details {
+  flex: 0 0 22rem;
+  max-width: 22rem;
+  border-left: 1px solid var(--bs-border-color);
+  background: var(--bs-light);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 991.98px) {
+  .fm-main {
+    flex-direction: column;
+  }
+  .fm-details {
+    flex-basis: auto;
+    max-width: none;
+    border-left: 0;
+    border-top: 1px solid var(--bs-border-color);
+  }
+}
+.fm-main.fm-dragover {
+  outline: 3px dashed var(--bs-primary);
+  outline-offset: -6px;
+  background: rgba(var(--bs-primary-rgb), 0.05);
+}
+.fm-table th {
+  font-size: 0.8rem;
+  color: var(--bs-secondary-color);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fm-table .fm-check {
+  width: 2rem;
+  padding-left: 0.75rem;
+}
+.fm-table .fm-name {
+  width: 100%;
+  max-width: 0;
+  overflow-wrap: anywhere;
+}
+.fm-table .fm-icon {
+  margin-right: 0.4rem;
+}
+.fm-table .fm-sub {
+  margin-left: 1.4rem;
+}
+.fm-table tr.fm-current > td {
+  background: rgba(var(--bs-primary-rgb), 0.08);
+}
+.fm-table .fm-actions .btn {
+  padding: 0.1rem 0.4rem;
+}
+.fm-filter {
+  width: 9rem;
+}
+.fm-props th {
+  width: 38%;
+  font-weight: 600;
+  color: var(--bs-secondary-color);
+}
+.fm-props td {
+  overflow-wrap: anywhere;
+}
+.fm-write-label.disabled {
+  pointer-events: none;
+  opacity: 0.65;
+}
+#musicManagerModal .alert-dismissible .btn-close {
+  padding: 0.6rem 0.75rem;
+}

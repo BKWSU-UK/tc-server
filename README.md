@@ -168,7 +168,7 @@ Each row in the playlist table represents a scheduled audio event:
 | **Schedule** | `Every` plays on selected days, `Except` skips selected days, `Manual` disables automatic playback. |
 | **Week** | Restrict to 1st, 2nd, or 3rd week of the month (visible when a specific day is selected). |
 | **Day** | Daily or a specific day of the week. |
-| **Content** | File or folder path. Select from the Media Library below. |
+| **Content** | File or folder path. Click it to pick a sound. |
 | **Mode** | `Single` plays the file, `Random` or `Sequential` for folders. |
 | **Volume** | Playback volume (0-99). Use the slider or scroll wheel. |
 | **Length** | `Full` plays the entire track, or limit to 10-180 seconds with fade-out. |
@@ -176,14 +176,22 @@ Each row in the playlist table represents a scheduled audio event:
 
 Use the + and - icons in the first column to add or remove rows.
 
-### Media Library
+### Selecting Audio
 
-The file browser at the bottom (elFinder) shows the contents of the `Music/` folder. To assign audio to a playlist item:
+To assign audio to a playlist item, click its Content box and pick a file or folder from the `Music/` folder. For folders, choose Random or Sequential playback mode.
 
-1. Click a row in the playlist to select it (highlighted in blue).
-2. Click a file or folder in the Media Library.
+### Managing Music Files
 
-The path appears in the Content column. For folders, choose Random or Sequential playback mode.
+Click **Manage Music** in the Music Files panel (between Playlist and Settings) (or **Manage** in the sound picker) to work with the files in `Music/`:
+
+- **Upload** sound files or whole folders with the buttons, or by dragging them onto the list. Uploads are sent in small pieces, so any file size works. Anything mplayer can't play is skipped. Video files are accepted too; their audio is played.
+- **New folder**, **rename** and **delete**. Renaming a file or folder also updates the playlist entries that use it. Deleting warns you if a playlist uses the item.
+- **Download** a file, or a folder as a ZIP. Tick several items to download or delete them together.
+- **Details**: click a file to listen to it and see what mplayer reads from it: length, format, codec, bitrate, sample rate, channels, chapters and every tag the file carries (title, artist, album and so on, from ID3, Vorbis comments, MP4, ASF/WMA, APE, Matroska and others). It also shows which playlist entries use the file.
+
+Files can only be changed from the local network; elsewhere the manager is read-only.
+
+**File ownership:** Traffic Control runs as its own user (`trafficcontrol` on Alpine, `www-data` on Debian, the add-on's user in Home Assistant). Files it uploads always belong to that user. Files copied into `Music/` some other way (e.g. as root over SSH, or via Samba) may belong to someone else. A small root cron job, installed by `deploy.sh` and by the add-on, hands them back to the app user every minute, so they can be renamed and deleted from the web page. Until then they're marked with a lock.
 
 ### System Mode vs Local Mode
 

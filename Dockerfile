@@ -18,7 +18,7 @@ RUN if command -v apk >/dev/null 2>&1; then \
             "php${PHPV}-ctype" "php${PHPV}-fileinfo" "php${PHPV}-calendar" \
             "php${PHPV}-phar" "php${PHPV}-openssl" \
             mplayer alsa-utils pulseaudio-utils bc \
-            coreutils grep procps bash util-linux tzdata \
+            coreutils grep findutils procps bash util-linux tzdata \
         && ln -sf "/usr/bin/php${PHPV}" /usr/bin/php \
         && rm -f /etc/nginx/http.d/default.conf; \
     else \
@@ -51,6 +51,11 @@ COPY Music/.system/ /app-defaults/.system/
 
 # Bundle default playlist; copied to /data on first run
 COPY .tcsys/playListDbDefault.JSON /app-defaults/playListDbDefault.JSON
+
+# Root-run helper that gives the app user files copied into Music by other
+# users (see the script). Installed root-owned, outside the app tree.
+COPY scripts/tc-fix-music-ownership.sh /usr/local/sbin/tc-fix-music-ownership
+RUN chmod 0755 /usr/local/sbin/tc-fix-music-ownership
 
 # Copy startup script
 COPY run.sh /

@@ -85,6 +85,18 @@ else
     chmod 644 /etc/cron.d/trafficcontrol
 fi
 
+# Every minute, as root: give the app user anything copied into the media
+# folder by another user (e.g. via Samba), so the file manager can change it.
+FIXER_CMD="/usr/local/sbin/tc-fix-music-ownership /media/trafficcontrol ${APP_USER} ${APP_GROUP}"
+if [ "$TC_OS" = "alpine" ]; then
+    touch /etc/crontabs/root
+    sed -i '/tc-fix-music-ownership/d' /etc/crontabs/root
+    echo "* * * * * ${FIXER_CMD}" >> /etc/crontabs/root
+else
+    echo "* * * * * root ${FIXER_CMD}" > /etc/cron.d/trafficcontrol-ownership
+    chmod 644 /etc/cron.d/trafficcontrol-ownership
+fi
+
 # --- Start services ---
 "$PHP_FPM_BIN" --nodaemonize &
 

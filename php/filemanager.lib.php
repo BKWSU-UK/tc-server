@@ -33,6 +33,7 @@
     'dts', 'wma', 'ape', 'wv', 'mpc', 'mp+', 'mka', 'weba', 'amr', 'awb',
     'au', 'snd', 'caf', 'tta', 'ra', 'ram', 'voc', 'w64', 'rf64', 'tak',
     'ofr', 'ofs', 'shn', 'mlp', 'thd', 'dsf', 'dff', 'gsm', 'aa3', 'oma',
+    'm4r', 'mpga', '3ga', 'ogx',
   ]);
   define('FM_VIDEO_EXTENSIONS', [
     'mp4', 'm4v', 'mkv', 'webm', 'mov', 'qt', 'avi', 'flv', 'wmv', 'asf',
@@ -61,16 +62,31 @@
       && trim($name) === $name;
   }
 
+  // A name that may already exist on disk (copied in by other means): only
+  // what can't be addressed safely is refused. New names use fmValidName().
+  function fmValidExistingName($name): bool {
+    return is_string($name) && $name !== '' && $name[0] !== '.' && strpos($name, "\0") === false;
+  }
+
   // Validate a relative path ('' is the Music root) and return its segments.
-  function fmSegments($rel): ?array {
+  // $strict applies the rules for new names (uploads creating folders).
+  function fmSegments($rel, bool $strict = false): ?array {
     if (!is_string($rel)) return null;
     $rel = trim($rel, '/');
     if ($rel === '') return [];
     $parts = explode('/', $rel);
     foreach ($parts as $p) {
-      if (!fmValidName($p)) return null;
+      if (!($strict ? fmValidName($p) : fmValidExistingName($p))) return null;
     }
     return $parts;
+  }
+
+  // A list parameter sent by the client as a JSON array (avoids PHP's
+  // max_input_vars limit), or as a plain form array.
+  function fmListParam($v): array {
+    if (is_string($v)) $v = json_decode($v, true);
+    if (!is_array($v)) return [];
+    return array_values(array_filter($v, 'is_string'));
   }
 
   // Resolve a relative path to an absolute one inside Music/. With
@@ -182,7 +198,8 @@
       'user' => $who['user'],
       'group' => $who['group'],
       'autoFix' => fmFixerInstalled(),
-      'command' => 'sudo chown -R ' . $who['user'] . ':' . $who['group'] . ' ' . escapeshellarg($root),
+      'command' => ((is_executable('/usr/bin/sudo') || is_executable('/bin/sudo')) ? 'sudo ' : '')
+        . 'chown -R ' . $who['user'] . ':' . $who['group'] . ' ' . escapeshellarg($root),
     ];
   }
 
@@ -206,7 +223,10 @@
     $ext = fmExtension($name);
     if (in_array($ext, FM_AUDIO_EXTENSIONS, true)) return 'audio';
     if (in_array($ext, FM_VIDEO_EXTENSIONS, true)) return 'video';
-    if (strpos($mime, 'audio/') === 0) return 'audio';
+    // Unknown extension: trust an audio MIME type, except for MIDI (mplayer
+    // can't play it) and playlist files (.m3u/.pls are audio/* too).
+    if (strpos($mime, 'audio/') === 0 && !preg_match('/midi|mpegurl|scpls|x-ms-wax|x-ms-wvx/', $mime)
+        && !preg_match('/^(php\d?|phtml|phar|html?|xhtml|svgz?|xml|js|mjs|css|cgi|pl|py|sh)$/', $ext)) return 'audio';
     return '';
   }
 
@@ -239,37 +259,62 @@
   //     Ogg FLAC) or ID3v1, so read those directly.
   function fmIdentify(string $abs): array {
     $ids = fmMplayerIds($abs);
+    $tags = fmTakeTags($ids);
     $demuxer = $ids['DEMUXER'] ?? '';
-    if (!isset($ids['CLIP_INFO_N']) && $demuxer !== '' && strpos($demuxer, 'lavf') !== 0) {
-      $lavf = fmMplayerIds($abs, '-demuxer lavf');
-      foreach ($lavf as $k => $v) {
-        if (strpos($k, 'CLIP_INFO_') === 0 || strpos($k, 'CHAPTER') === 0 || !isset($ids[$k]) && $k === 'LENGTH') {
-          $ids[$k] = $v;
-        }
-      }
-    }
-    $extra = [];
     $ext = fmExtension($abs);
-    if (in_array($ext, ['ogg', 'oga', 'ogv', 'opus', 'spx'], true)) {
-      $extra = fmReadOggComments($abs);
-    }
-    if (!isset($ids['CLIP_INFO_N']) || in_array($ext, ['mp3', 'mp2', 'mp1', 'mpa'], true)) {
-      $extra = array_merge($extra, fmReadId3v1($abs));
-    }
-    if ($extra) {
-      $n = isset($ids['CLIP_INFO_N']) ? (int)$ids['CLIP_INFO_N'] : 0;
-      $have = [];
-      for ($i = 0; $i < $n; $i++) $have[strtolower($ids["CLIP_INFO_NAME$i"] ?? '')] = true;
-      foreach ($extra as $tag) {
-        if (isset($have[strtolower($tag['name'])])) continue;
-        $have[strtolower($tag['name'])] = true;
-        $ids["CLIP_INFO_NAME$n"] = $tag['name'];
-        $ids["CLIP_INFO_VALUE$n"] = $tag['value'];
-        $n++;
+    $isMpegAudio = in_array($ext, ['mp3', 'mp2', 'mp1', 'mpa', 'mpga'], true);
+    $noLength = !isset($ids['LENGTH']) || (float)$ids['LENGTH'] <= 0;
+    // mplayer's own MP3 demuxer only sees ID3v1 (30-character fields), and
+    // some demuxers (MPEG-TS/PS) report no length: ask libavformat too.
+    if ($demuxer !== '' && strpos($demuxer, 'lavf') !== 0 && (!$tags || $isMpegAudio || $noLength)) {
+      $lavf = fmMplayerIds($abs, '-demuxer lavf');
+      $tags = fmMergeTags(fmTakeTags($lavf), $tags);
+      foreach ($lavf as $k => $v) {
+        if (strpos($k, 'CHAPTER') === 0 && !isset($ids['CHAPTERS'])) $ids[$k] = $v;
       }
-      $ids['CLIP_INFO_N'] = (string)$n;
+      if ($noLength && isset($lavf['LENGTH']) && (float)$lavf['LENGTH'] > 0) $ids['LENGTH'] = $lavf['LENGTH'];
     }
+    if (in_array($ext, ['ogg', 'oga', 'ogv', 'ogx', 'opus', 'spx'], true)) {
+      $tags = fmMergeTags($tags, fmReadOggComments($abs));
+    }
+    if ($isMpegAudio) {
+      $tags = fmMergeTags($tags, fmReadId3v1($abs));
+    }
+    foreach ($tags as $i => $t) {
+      $ids["CLIP_INFO_NAME$i"] = $t['name'];
+      $ids["CLIP_INFO_VALUE$i"] = $t['value'];
+    }
+    if ($tags) $ids['CLIP_INFO_N'] = (string)count($tags);
     return $ids;
+  }
+
+  // Remove mplayer's CLIP_INFO_* entries from $ids and return them as tags.
+  function fmTakeTags(array &$ids): array {
+    $tags = [];
+    $n = isset($ids['CLIP_INFO_N']) ? (int)$ids['CLIP_INFO_N'] : 0;
+    for ($i = 0; $i < max($n, 64); $i++) {
+      if (!isset($ids["CLIP_INFO_NAME$i"])) { if ($i >= $n) break; continue; }
+      $name = trim($ids["CLIP_INFO_NAME$i"]);
+      $value = trim($ids["CLIP_INFO_VALUE$i"] ?? '');
+      if ($name !== '' && $value !== '') $tags[] = ['name' => $name, 'value' => $value];
+    }
+    foreach (array_keys($ids) as $k) {
+      if (strpos($k, 'CLIP_INFO_') === 0) unset($ids[$k]);
+    }
+    return $tags;
+  }
+
+  // $first, then anything in $more whose name (case-insensitively) isn't
+  // already there.
+  function fmMergeTags(array $first, array $more): array {
+    $have = [];
+    foreach ($first as $t) $have[strtolower($t['name'])] = true;
+    foreach ($more as $t) {
+      if (isset($have[strtolower($t['name'])])) continue;
+      $have[strtolower($t['name'])] = true;
+      $first[] = $t;
+    }
+    return $first;
   }
 
   // Vorbis comments from the first logical stream of an Ogg file: the
@@ -286,9 +331,12 @@
       if (strlen($hdr) < 27 || substr($hdr, 0, 4) !== 'OggS') break;
       $pageSerial = unpack('V', substr($hdr, 14, 4))[1];
       $segCount = ord($hdr[26]);
-      $segs = fread($fh, $segCount);
-      $sizes = array_map('ord', str_split($segs));
-      $body = $segCount ? fread($fh, array_sum($sizes)) : '';
+      $segs = $segCount > 0 ? fread($fh, $segCount) : '';
+      if (strlen($segs) < $segCount) break;
+      $sizes = $segs === '' ? [] : array_map('ord', str_split($segs));
+      $len = array_sum($sizes);
+      $body = $len > 0 ? fread($fh, $len) : '';
+      if (strlen($body) < $len) break;
       $read += 27 + $segCount + strlen($body);
       if ($serial === null) $serial = $pageSerial;
       if ($pageSerial !== $serial) continue;
@@ -608,11 +656,12 @@
   // time budget runs out (the client asks again for the rest).
   function fmInfoBatch($dirRel, $names): array {
     $dir = fmResolve($dirRel);
-    if ($dir === null || !is_dir($dir) || !is_array($names)) return ['error' => 'Folder not found'];
+    $names = fmListParam($names);
+    if ($dir === null || !is_dir($dir)) return ['error' => 'Folder not found'];
     $start = microtime(true);
     $out = [];
     foreach (array_slice($names, 0, 50) as $name) {
-      if (!fmValidName($name)) continue;
+      if (!fmValidExistingName($name)) continue;
       $abs = fmResolve(fmJoin(fmRel($dir), $name));
       if ($abs === null || !is_file($abs) || fmMediaKind($name) === '' && strpos((string)@mime_content_type($abs), 'audio/') !== 0) {
         $out[$name] = null;
@@ -673,12 +722,18 @@
       if (!isset($pl->list) || !is_array($pl->list)) continue;
       foreach ($pl->list as $i => $entry) {
         $what = isset($entry->what) ? (string)$entry->what : '';
+        if (fmIsChimeEntry($entry)) continue;
         if ($what !== '' && ($what === $rel || strpos($what, $rel . '/') === 0)) {
           $refs[] = ['playlist' => (string)($pl->name ?? ''), 'row' => $i + 1, 'time' => (string)($entry->time ?? ''), 'what' => $what];
         }
       }
     }
     return $refs;
+  }
+
+  // "Chime" entries play the built-in chime, whatever is in Music.
+  function fmIsChimeEntry($entry): bool {
+    return strtolower((string)($entry->what ?? '')) === 'chime' || ($entry->mime ?? '') === 'audio/chime';
   }
 
   function fmRewritePath(string $p, string $from, string $to): ?string {
@@ -701,12 +756,15 @@
     global $tc;
     $tc->getLock('fmRename');
     try {
-      $stored = $tc->loadStored();
+      // Re-read under the lock: the copy loaded at the start of the request
+      // may be older than what the scheduler has written since.
+      $stored = $tc->loadStored(true);
       $changed = 0;
       if (!isset($stored->list) || !is_array($stored->list)) return 0;
       foreach ($stored->list as $pl) {
         if (isset($pl->list) && is_array($pl->list)) {
           foreach ($pl->list as $entry) {
+            if (fmIsChimeEntry($entry)) continue;
             $hit = false;
             foreach (['what', 'whatSelectedLocal', 'whatSelectedRemote'] as $f) {
               if (isset($entry->$f) && is_string($entry->$f)) {
@@ -777,9 +835,19 @@
     if ($abs === null || (!file_exists($abs) && !is_link($abs))) return ['error' => 'Not found'];
     $target = dirname($abs) . '/' . $newName;
     if ($target === $abs) return ['success' => true, 'path' => fmRel($abs), 'references' => 0];
-    // Allow changing only the letter case on case-insensitive filesystems.
-    if ((file_exists($target) || is_link($target)) && strcasecmp($target, $abs) !== 0) {
-      return ['error' => "\"$newName\" already exists"];
+    // A file must stay a sound file: this keeps it playable, and stops a
+    // file being renamed to something the web server would run (.php) or
+    // render (.html).
+    if (!is_dir($abs) && fmMediaKind($newName) === '') {
+      return ['error' => 'The new name must end in a sound file extension such as .' . (fmExtension($abs) ?: 'mp3')];
+    }
+    if (file_exists($target) || is_link($target)) {
+      // Only allowed when it is the same file (a case-only rename on a
+      // case-insensitive filesystem), never over a different file.
+      $a = @lstat($abs);
+      $b = @lstat($target);
+      $same = strcasecmp($target, $abs) === 0 && $a && $b && $a['dev'] === $b['dev'] && $a['ino'] === $b['ino'];
+      if (!$same) return ['error' => "\"$newName\" already exists"];
     }
     if (!fmCanModify($abs)) return fmPermissionError('rename', $abs, dirname($abs));
     $from = fmRel($abs);
@@ -797,7 +865,8 @@
   }
 
   function fmDelete($paths): array {
-    if (!is_array($paths) || count($paths) === 0) return ['error' => 'Nothing to delete'];
+    $paths = fmListParam($paths);
+    if (count($paths) === 0) return ['error' => 'Nothing to delete'];
     $targets = [];
     foreach ($paths as $rel) {
       $abs = fmResolve($rel, false);
@@ -864,12 +933,13 @@
   function fmCheckUpload($dirRel, $relPaths): array {
     $dir = fmResolve($dirRel);
     if ($dir === null || !is_dir($dir)) return ['error' => 'Folder not found'];
-    if (!is_array($relPaths)) return ['error' => 'Nothing to upload'];
+    $relPaths = fmListParam($relPaths);
+    if (!$relPaths) return ['error' => 'Nothing to upload'];
     $exists = [];
     $invalid = [];
     $unplayable = [];
     foreach ($relPaths as $rp) {
-      $parts = fmSegments($rp);
+      $parts = fmSegments($rp, true);
       if ($parts === null || count($parts) === 0) { $invalid[] = (string)$rp; continue; }
       if (fmMediaKind(end($parts)) === '') { $unplayable[] = (string)$rp; continue; }
       if (file_exists($dir . '/' . implode('/', $parts))) $exists[] = $rp;
@@ -886,7 +956,7 @@
   // half-written file).
   function fmUploadChunk(array $q): array {
     $dir = fmResolve($q['dir'] ?? null);
-    $parts = fmSegments($q['relPath'] ?? null);
+    $parts = fmSegments($q['relPath'] ?? null, true);
     $id = $q['uploadId'] ?? '';
     $offset = filter_var($q['offset'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
     $total = filter_var($q['total'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
@@ -917,6 +987,12 @@
     // Hidden while incomplete; keeps the real extension so mplayer's format
     // probe works on it.
     $part = $target . '/' . FM_UPLOAD_PREFIX . $id . '.' . fmExtension($name);
+    // Written when an upload completes, so a retried last chunk (its reply
+    // was lost) is answered "done" instead of starting the file again.
+    $marker = $target . '/' . FM_UPLOAD_PREFIX . $id . '.done';
+    if (is_file($marker)) {
+      return ['done' => true, 'path' => trim((string)@file_get_contents($marker))];
+    }
     if ($offset === 0) {
       $free = @disk_free_space($target);
       if ($free !== false && $free < $total + 10 * 1024 * 1024) {
@@ -965,6 +1041,7 @@
     if (file_exists($final) || is_link($final)) {
       if ($conflict === 'skip') {
         @unlink($part);
+        @file_put_contents($marker, fmRel($final));
         return ['done' => true, 'skipped' => true, 'path' => fmRel($final)];
       }
       if ($conflict === 'rename') {
@@ -978,6 +1055,7 @@
       @unlink($part);
       return ['error' => 'Could not save "' . $name . '"'];
     }
+    @file_put_contents($marker, fmRel($final));
     $st = @stat($final);
     if ($st !== false) fmInfoCacheStore(fmRel($final), $st, $info);
     return ['done' => true, 'path' => fmRel($final)];
@@ -1001,15 +1079,24 @@
     return 'attachment; filename="' . $ascii . '"; filename*=UTF-8\'\'' . rawurlencode($name);
   }
 
+  // Downloads run in a hidden frame (frame=1), so report errors to the page
+  // instead of showing a bare error document.
   function fmSendError(int $code, string $message): void {
     http_response_code($code);
+    if (!empty($_REQUEST['frame'])) {
+      header('Content-Type: text/html; charset=utf-8');
+      echo '<script>parent.postMessage({tcDownloadFailed: '
+        . json_encode($message, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . '}, location.origin);</script>';
+      return;
+    }
     header('Content-Type: text/plain; charset=utf-8');
     echo $message;
   }
 
   // Stream a file, or a ZIP of folders/several items, to the browser.
   function fmDownload($paths): void {
-    if (!is_array($paths) || count($paths) === 0) { fmSendError(400, 'Nothing to download'); return; }
+    $paths = fmListParam($paths);
+    if (count($paths) === 0) { fmSendError(400, 'Nothing to download'); return; }
     $targets = [];
     foreach ($paths as $rel) {
       $abs = fmResolve($rel);

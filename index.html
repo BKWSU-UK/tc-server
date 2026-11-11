@@ -25,10 +25,11 @@
     
     <!-- Local CSS -->
     <link rel="stylesheet" type="text/css" media="screen" href="css/tc-nojs.css">
-    <link rel="stylesheet" type="text/css" media="screen" href="css/tc.css?v=20260323a">
+    <link rel="stylesheet" type="text/css" media="screen" href="css/tc.css?v=20261111b">
     
     <!-- Local JS -->
-    <script src="js/tc.js?v=20261110b"></script>
+    <script src="js/tc.js?v=20261111b"></script>
+    <script src="js/tc-filemanager.js?v=20261111b"></script>
     
     <script>
       $().ready(function() {
@@ -69,6 +70,18 @@
                 <div id="playListSelector">
                   <!-- JS Generated -->
                 </div>
+              </div>
+            </div>
+
+            <div class="card shadow-sm mb-4 border-0">
+              <div class="card-body">
+                <h5 class="card-title mb-2 d-flex align-items-center">
+                  <i class="bi bi-folder2-open me-2 text-primary"></i>Music Files
+                </h5>
+                <p class="small text-muted mb-3">Upload, rename, delete and download the sounds your playlists use.</p>
+                <button type="button" class="btn btn-outline-primary w-100" onclick="TC.fm.open();">
+                  <i class="bi bi-folder2-open me-1"></i>Manage Music
+                </button>
               </div>
             </div>
 
@@ -208,12 +221,67 @@
               <div id="fileBrowserBreadcrumb" class="p-3 bg-light border-bottom small"></div>
               <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
                 <span class="small text-muted"><i class="bi bi-info-circle me-1"></i>Click a folder to browse, or a song to select.</span>
-                <div class="btn-group btn-group-sm">
-                  <button type="button" class="btn btn-outline-secondary" onclick="TC.fileBrowserNewFolder();" title="New Folder"><i class="bi bi-folder-plus"></i></button>
-                  <label class="btn btn-outline-secondary mb-0" title="Upload Files"><i class="bi bi-upload"></i><input type="file" id="fileBrowserUpload" multiple accept="audio/*" style="display:none;" onchange="TC.fileBrowserUpload(this.files);"></label>
-                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="TC.fileBrowserManage();" title="Upload, rename, delete and download music files"><i class="bi bi-folder2-open me-1"></i>Manage</button>
               </div>
               <div id="fileBrowserContents" style="max-height: 350px; overflow-y: auto;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal fade" id="musicManagerModal" tabindex="-1" aria-labelledby="musicManagerModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-fullscreen-lg-down modal-dialog-scrollable">
+          <div class="modal-content">
+            <div class="modal-header py-2">
+              <h5 class="modal-title" id="musicManagerModalLabel"><i class="bi bi-folder2-open me-2"></i>Music Files</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="px-3 py-2 border-bottom bg-light">
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <button type="button" id="fmUp" class="btn btn-sm btn-outline-secondary" title="Up one folder"><i class="bi bi-arrow-up"></i></button>
+                <div id="fmBreadcrumb" class="small flex-grow-1 text-truncate"></div>
+                <input type="search" id="fmFilter" class="form-control form-control-sm fm-filter" placeholder="Filter…" aria-label="Filter this folder">
+                <div class="btn-group btn-group-sm">
+                  <button type="button" id="fmNewFolder" class="btn btn-outline-secondary fm-write" title="New folder"><i class="bi bi-folder-plus"></i><span class="d-none d-sm-inline ms-1">New folder</span></button>
+                  <label class="btn btn-outline-primary mb-0 fm-write fm-write-label" title="Upload sound files">
+                    <i class="bi bi-upload"></i><span class="d-none d-sm-inline ms-1">Upload files</span>
+                    <input type="file" id="fmUploadFiles" class="d-none" multiple accept="audio/*,video/*,.flac,.opus,.ape,.wv,.mpc,.mka,.wma,.ac3,.dts,.aac,.m4a,.m4b,.amr,.tta">
+                  </label>
+                  <label class="btn btn-outline-primary mb-0 fm-write fm-write-label" title="Upload a whole folder">
+                    <i class="bi bi-folder-symlink"></i><span class="d-none d-sm-inline ms-1">Upload folder</span>
+                    <input type="file" id="fmUploadFolder" class="d-none" webkitdirectory multiple>
+                  </label>
+                  <button type="button" id="fmRefresh" class="btn btn-outline-secondary" title="Refresh"><i class="bi bi-arrow-clockwise"></i></button>
+                </div>
+              </div>
+              <div id="fmSelectionBar" class="d-flex flex-wrap align-items-center gap-2 mt-2 d-none">
+                <span id="fmSelectionCount" class="small fw-bold"></span>
+                <button type="button" id="fmDownloadSelected" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i>Download</button>
+                <button type="button" id="fmDeleteSelected" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i>Delete</button>
+                <button type="button" id="fmClearSelection" class="btn btn-sm btn-link">Clear selection</button>
+              </div>
+            </div>
+            <div class="modal-body p-0">
+              <div class="px-3 pt-2">
+                <div id="fmPermBanner"></div>
+                <div id="fmMessages"></div>
+                <div id="fmUpload" class="mb-2 d-none">
+                  <div class="d-flex align-items-center gap-2 small">
+                    <span id="fmUploadLabel" class="flex-grow-1 text-truncate"></span>
+                    <button type="button" id="fmCancelUpload" class="btn btn-sm btn-outline-danger py-0">Cancel</button>
+                  </div>
+                  <div class="progress mt-1" style="height: 6px;">
+                    <div class="progress-bar" role="progressbar" style="width:0%" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+                  </div>
+                </div>
+              </div>
+              <div id="fmMain" class="fm-main">
+                <div id="fmList" class="fm-list"></div>
+                <div id="fmDetails" class="fm-details d-none"></div>
+              </div>
+            </div>
+            <div class="modal-footer py-1 justify-content-between">
+              <span id="fmStatus" class="small text-muted"></span>
+              <span id="fmDropHint" class="small text-muted d-none d-md-inline"><i class="bi bi-info-circle me-1"></i>Drag sound files or folders onto the list to upload them.</span>
             </div>
           </div>
         </div>
@@ -314,6 +382,16 @@
                 <li>Navigate and click a file or folder to select it.</li>
               </ol>
               <p>For folders, choose <em>Random</em> or <em>Sequential</em> playback mode.</p>
+
+              <h5 class="text-primary mt-4"><i class="bi bi-folder2-open me-2"></i>Managing Music Files</h5>
+              <p>Click <strong>Manage Music</strong> in the Music Files panel (or <strong>Manage</strong> in the sound picker) to work with the files on the server:</p>
+              <ul>
+                <li><strong>Upload</strong> sound files or whole folders with the buttons, or drag them onto the list. Files of any size can be uploaded; anything that isn't a playable sound file is skipped.</li>
+                <li><strong>New folder</strong>, <strong>Rename</strong> (pencil) and <strong>Delete</strong> (trash). Renaming a file or folder updates the playlist entries that use it.</li>
+                <li><strong>Download</strong> a file, or a folder as a ZIP. Tick several items to download or delete them together.</li>
+                <li>Click a file name or <i class="bi bi-info-circle"></i> to listen to it and see its length, format and tags (title, artist, album and so on), and which playlists use it.</li>
+              </ul>
+              <p>Files can only be changed from the local network. A <i class="bi bi-lock-fill text-warning"></i> marks items Traffic Control can't change because they were copied in by another user; these are normally fixed automatically within a minute.</p>
 
               <h5 class="text-primary mt-4"><i class="bi bi-toggles me-2"></i>System Mode vs Local Mode</h5>
               <p>The <strong>System Mode</strong> toggle determines where audio plays:</p>

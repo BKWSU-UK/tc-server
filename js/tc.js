@@ -742,17 +742,12 @@ const TC = (() => {
         html += '<a href="#" class="fb-dir flex-grow-1 text-decoration-none text-dark"><i class="bi bi-folder-fill text-warning me-2"></i>' + TC.escapeHtml(file.name) + ' <i class="bi bi-chevron-right text-muted small"></i></a>';
         html += '<div class="btn-group btn-group-sm ms-2">';
         html += '<button type="button" class="btn btn-outline-primary btn-sm fb-select-dir" title="Use folder">Select</button>';
-        html += '<button type="button" class="btn btn-outline-secondary btn-sm fb-rename" title="Rename"><i class="bi bi-pencil"></i></button>';
-        html += '<button type="button" class="btn btn-outline-danger btn-sm fb-delete" title="Delete"><i class="bi bi-trash"></i></button>';
         html += '</div></div>';
       } else if (file.path !== 'Chime') {
         html += '<div class="list-group-item d-flex justify-content-between align-items-center fb-item" ';
         html += 'data-hash="' + TC.escapeHtml(file.hash || '') + '" data-path="' + TC.escapeHtml(file.path) + '" data-name="' + TC.escapeHtml(file.name) + '" data-mime="' + TC.escapeHtml(file.mime) + '">';
         html += '<a href="#" class="fb-file flex-grow-1 text-decoration-none text-dark"><i class="bi bi-music-note text-primary me-2"></i>' + TC.escapeHtml(file.name) + '</a>';
-        html += '<div class="btn-group btn-group-sm ms-2">';
-        html += '<button type="button" class="btn btn-outline-secondary btn-sm fb-rename" title="Rename"><i class="bi bi-pencil"></i></button>';
-        html += '<button type="button" class="btn btn-outline-danger btn-sm fb-delete" title="Delete"><i class="bi bi-trash"></i></button>';
-        html += '</div></div>';
+        html += '</div>';
       } else {
         html += '<a href="#" class="list-group-item list-group-item-action fb-file fb-item" ';
         html += 'data-hash="" data-path="Chime" data-name="Chime" data-mime="audio/chime">';
@@ -788,129 +783,18 @@ const TC = (() => {
       e.preventDefault();
       const $fbEl3 = $(this).closest('.fb-item');
       TC.fileBrowserSelectItem($fbEl3.attr('data-path'), $fbEl3.attr('data-hash'), $fbEl3.attr('data-mime'));
-    }).on('click', '.fb-rename', function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      const $fbEl4 = $(this).closest('.fb-item');
-      TC.fileBrowserRename($fbEl4.attr('data-path'), $fbEl4.attr('data-name'));
-    }).on('click', '.fb-delete', function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      const $fbEl5 = $(this).closest('.fb-item');
-      TC.fileBrowserDelete($fbEl5.attr('data-path'), $fbEl5.attr('data-name'));
     });
-  };
-
-  TC.fileBrowserNewFolder = function () {
-    const name = prompt('Enter folder name:');
-    if (name && name.trim()) {
-      const currentPath = TC.fileBrowserPath.map(function(p) { return p.name; }).join('/');
-      $.ajax({
-        url: 'php/tc.php',
-        method: 'POST',
-        data: { action: 'createFolder', path: currentPath, name: name.trim() },
-        dataType: 'json',
-        success: function (result) {
-          if (result.error) {
-            alert('Error: ' + result.error);
-          } else {
-            TC.loadFileBrowserContents(TC.fileBrowserCurrentHash);
-          }
-        },
-        error: function () {
-          alert('Failed to create folder');
-        }
-      });
-    }
-  };
-
-  TC.fileBrowserUpload = function (files) {
-    if (!files || files.length === 0) return;
-
-    const formData = new FormData();
-    formData.append('action', 'uploadFile');
-    const currentPath = TC.fileBrowserPath.map(function(p) { return p.name; }).join('/');
-    formData.append('path', currentPath);
-
-    for (let i = 0; i < files.length; i++) {
-      formData.append('files[]', files[i]);
-    }
-
-    const container = $('#fileBrowserContents');
-    container.html('<div class="text-center p-4"><i class="bi bi-arrow-repeat spin"></i> Uploading...</div>');
-    
-    $.ajax({
-      url: 'php/tc.php',
-      method: 'POST',
-      data: formData,
-      processData: false,
-      contentType: false,
-      dataType: 'json',
-      success: function (result) {
-        if (result.error) {
-          alert('Error: ' + result.error);
-        } else if (result.uploaded) {
-          if (result.errors && result.errors.length > 0) {
-            alert('Uploaded ' + result.uploaded + ' file(s). Errors:\n' + result.errors.join('\n'));
-          }
-        }
-        TC.loadFileBrowserContents(TC.fileBrowserCurrentHash);
-      },
-      error: function () {
-        alert('Upload failed');
-        TC.loadFileBrowserContents(TC.fileBrowserCurrentHash);
-      }
-    });
-    
-    $('#fileBrowserUpload').val('');
-  };
-
-  TC.fileBrowserRename = function (path, currentName) {
-    const newName = prompt('Enter new name:', currentName);
-    if (newName && newName.trim() && newName !== currentName) {
-      $.ajax({
-        url: 'php/tc.php',
-        method: 'POST',
-        data: { action: 'renameItem', path: path, newName: newName.trim() },
-        dataType: 'json',
-        success: function (result) {
-          if (result.error) {
-            alert('Error: ' + result.error);
-          } else {
-            TC.loadFileBrowserContents(TC.fileBrowserCurrentHash);
-          }
-        },
-        error: function () {
-          alert('Failed to rename');
-        }
-      });
-    }
-  };
-
-  TC.fileBrowserDelete = function (path, name) {
-    if (confirm('Delete "' + name + '"?\n\nThis cannot be undone.')) {
-      $.ajax({
-        url: 'php/tc.php',
-        method: 'POST',
-        data: { action: 'deleteItem', path: path },
-        dataType: 'json',
-        success: function (result) {
-          if (result.error) {
-            alert('Error: ' + result.error);
-          } else {
-            TC.loadFileBrowserContents(TC.fileBrowserCurrentHash);
-          }
-        },
-        error: function () {
-          alert('Failed to delete');
-        }
-      });
-    }
   };
 
   TC.escapeHtml = function (str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  };
+
+  // Close the sound picker and open the file manager in the same folder.
+  TC.fileBrowserManage = function () {
+    const path = TC.fileBrowserPath.map(function (p) { return p.name; }).join('/');
+    $('#fileBrowserModal').one('hidden.bs.modal', function () { TC.fm.open(path); }).modal('hide');
   };
 
   TC.updateBreadcrumb = function () {
@@ -1784,6 +1668,7 @@ const TC = (() => {
   
   //Initialise
   TC.init = function () {
+    TC.fm.init();
     
     //Bind to audio player events
     $('#audioPlayerDiv').hide();

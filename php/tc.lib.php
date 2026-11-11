@@ -34,6 +34,8 @@
   // its functionality is now in the date extension (always bundled).
   define ( 'PHP_EXTENSIONS', 'ctype|fileinfo|session|mbstring');
 
+  require_once __DIR__ . '/filemanager.lib.php';
+
   //This may be changed by some functions but must be set now
   //to prevent warnings
   date_default_timezone_set ( "Europe/London" );
@@ -630,8 +632,10 @@ function calculateBankHolidays($yr) {
     return ['id' => $initialLevel . '-' . $id, 'hasMixerControl' => $hasMixerControl, 'volume' => $combinedVolume];
   }
 
+  // Anything mplayer can play (audio files, and the audio of video files).
   function fileIsAudio ($file) {
-    return (strpos($file['mime'], 'audio') !== false);
+    $mime = $file['mime'] ?? '';
+    return $mime !== 'directory' && fmIsPlayable($file['name'] ?? '', $mime);
   }
 
   function listAllSounds($phash = '') {
@@ -679,7 +683,7 @@ function calculateBankHolidays($yr) {
         if (!empty($phash) && isset($file['phash']) && $file['phash'] !== $phash) continue;
 
         $isDir = (isset($file['mime']) && $file['mime'] === 'directory');
-        $isAudio = (isset($file['mime']) && strpos($file['mime'], 'audio') !== false);
+        $isAudio = !$isDir && fileIsAudio($file);
 
         if ($isDir || $isAudio) {
           $name = $file['name'];
@@ -705,163 +709,6 @@ function calculateBankHolidays($yr) {
     });
 
     return $sounds;
-  }
-
-  function sanitizePath($path) {
-    $path = str_replace(['..', "\0"], '', $path);
-    $path = preg_replace('/[\/\\\\]+/', '/', $path);
-    $path = trim($path, '/');
-    return $path;
-  }
-
-  function getFullPath($relativePath) {
-    $relativePath = sanitizePath($relativePath);
-    $fullPath = PLAYLISTDIR . '/' . $relativePath;
-    $realPath = realpath(dirname($fullPath));
-    if ($realPath === false || strpos($realPath, realpath(PLAYLISTDIR)) !== 0) {
-      return false;
-    }
-    return $fullPath;
-  }
-
-  function createFolder($currentPath, $name) {
-    $name = sanitizePath($name);
-    if (empty($name)) {
-      return ['error' => 'Folder name is required'];
-    }
-    $currentPath = sanitizePath($currentPath);
-    $fullPath = PLAYLISTDIR . '/' . ($currentPath ? $currentPath . '/' : '') . $name;
-
-    $parentReal = realpath(PLAYLISTDIR . '/' . $currentPath);
-    if ($parentReal === false || strpos($parentReal, realpath(PLAYLISTDIR)) !== 0) {
-      return ['error' => 'Invalid path'];
-    }
-
-    if (file_exists($fullPath)) {
-      return ['error' => 'Folder already exists'];
-    }
-
-    if (mkdir($fullPath, 0755, true)) {
-      return ['success' => true];
-    }
-    return ['error' => 'Failed to create folder'];
-  }
-
-  function deleteItem($path) {
-    $path = sanitizePath($path);
-    if (empty($path)) {
-      return ['error' => 'Path is required'];
-    }
-    $fullPath = PLAYLISTDIR . '/' . $path;
-    $realPath = realpath($fullPath);
-
-    if ($realPath === false || strpos($realPath, realpath(PLAYLISTDIR)) !== 0) {
-      return ['error' => 'Invalid path'];
-    }
-    if ($realPath === realpath(PLAYLISTDIR)) {
-      return ['error' => 'Cannot delete root folder'];
-    }
-
-    if (is_dir($realPath)) {
-      $iterator = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator($realPath, RecursiveDirectoryIterator::SKIP_DOTS),
-        RecursiveIteratorIterator::CHILD_FIRST
-      );
-      foreach ($iterator as $file) {
-        if ($file->isDir()) {
-          rmdir($file->getPathname());
-        } else {
-          unlink($file->getPathname());
-        }
-      }
-      if (rmdir($realPath)) {
-        return ['success' => true];
-      }
-    } else {
-      if (unlink($realPath)) {
-        return ['success' => true];
-      }
-    }
-    return ['error' => 'Failed to delete'];
-  }
-
-  function renameItem($path, $newName) {
-    $path = sanitizePath($path);
-    $newName = sanitizePath($newName);
-    if (empty($path) || empty($newName)) {
-      return ['error' => 'Path and new name are required'];
-    }
-
-    $fullPath = PLAYLISTDIR . '/' . $path;
-    $realPath = realpath($fullPath);
-
-    if ($realPath === false || strpos($realPath, realpath(PLAYLISTDIR)) !== 0) {
-      return ['error' => 'Invalid path'];
-    }
-    if ($realPath === realpath(PLAYLISTDIR)) {
-      return ['error' => 'Cannot rename root folder'];
-    }
-
-    $parentDir = dirname($realPath);
-    $newPath = $parentDir . '/' . basename($newName);
-
-    if (file_exists($newPath)) {
-      return ['error' => 'A file with that name already exists'];
-    }
-
-    if (rename($realPath, $newPath)) {
-      return ['success' => true];
-    }
-    return ['error' => 'Failed to rename'];
-  }
-
-  function uploadFiles($currentPath, $files) {
-    $currentPath = sanitizePath($currentPath);
-    $targetDir = PLAYLISTDIR . '/' . $currentPath;
-
-    $realTargetDir = realpath($targetDir);
-    if ($realTargetDir === false) {
-      $realTargetDir = realpath(PLAYLISTDIR);
-      $targetDir = PLAYLISTDIR;
-    }
-    if (strpos($realTargetDir, realpath(PLAYLISTDIR)) !== 0) {
-      return ['error' => 'Invalid path'];
-    }
-
-    $uploaded = 0;
-    $errors = [];
-    $audioMimes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/flac', 'audio/ogg', 'audio/m4a', 'audio/aac', 'audio/x-m4a'];
-
-    if (isset($files['files'])) {
-      $fileCount = count($files['files']['name']);
-      for ($i = 0; $i < $fileCount; $i++) {
-        if ($files['files']['error'][$i] === UPLOAD_ERR_OK) {
-          $tmpName = $files['files']['tmp_name'][$i];
-          $name = basename($files['files']['name'][$i]);
-          $mime = mime_content_type($tmpName);
-
-          if (!in_array($mime, $audioMimes) && strpos($mime, 'audio/') !== 0) {
-            $errors[] = "$name: Not an audio file";
-            continue;
-          }
-
-          $name = preg_replace('/[^\w\s\-\.\(\)]/', '_', $name);
-          $targetPath = $targetDir . '/' . $name;
-
-          if (move_uploaded_file($tmpName, $targetPath)) {
-            chmod($targetPath, 0644);
-            $uploaded++;
-          } else {
-            $errors[] = "$name: Upload failed";
-          }
-        }
-      }
-    }
-
-    if ($uploaded > 0) {
-      return ['success' => true, 'uploaded' => $uploaded, 'errors' => $errors];
-    }
-    return ['error' => 'No files uploaded', 'errors' => $errors];
   }
 
   function listFiles ($phash) {

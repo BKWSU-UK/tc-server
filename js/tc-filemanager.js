@@ -97,8 +97,9 @@ TC.fm = (() => {
         'Traffic Control hands them back to its own user (<code>' + esc(p.user) + '</code>) automatically within a minute. ' +
         '<a href="#" class="fm-refresh alert-link">Check again</a></div>';
     }
+    const asRoot = p.command.indexOf('sudo ') === 0 ? '' : ' as root';
     return '<div class="small mt-1">Files copied in by another user can\'t be changed by Traffic Control (it runs as <code>' +
-      esc(p.user) + '</code>). To fix this, run on the server:<br><code class="user-select-all">' + esc(p.command) +
+      esc(p.user) + '</code>). To fix this, run on the server' + asRoot + ':<br><code class="user-select-all">' + esc(p.command) +
       '</code><br>or re-run <code>deploy.sh</code>, which also sets this up to happen automatically.</div>';
   };
 
@@ -280,7 +281,7 @@ TC.fm = (() => {
     const next = function () {
       if (gen !== fm.generation || !pending.length) return;
       const batch = pending.splice(0, INFO_BATCH);
-      fm.post({ action: 'fmInfo', path: fm.path, names: batch })
+      fm.post({ action: 'fmInfo', path: fm.path, names: JSON.stringify(batch) })
         .done(function (data) {
           if (gen !== fm.generation || !data || !data.info) return;
           let progressed = false;
@@ -391,14 +392,34 @@ TC.fm = (() => {
 
   // ------------------------------------------------------------- actions
 
+  // Download via a hidden frame: a POST carries any number of paths, the
+  // file arrives as an attachment, and errors come back as downloadFailed().
   fm.download = function (paths) {
-    const qs = paths.map(function (p) { return 'paths[]=' + encodeURIComponent(p); }).join('&');
-    const a = document.createElement('a');
-    a.href = API + '?action=fmDownload&' + qs;
-    a.download = '';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    let frame = document.getElementById('fmDownloadFrame');
+    if (!frame) {
+      frame = document.createElement('iframe');
+      frame.id = frame.name = 'fmDownloadFrame';
+      frame.className = 'd-none';
+      document.body.appendChild(frame);
+    }
+    const form = document.createElement('form');
+    form.method = 'post';
+    form.action = API;
+    form.target = 'fmDownloadFrame';
+    [['action', 'fmDownload'], ['frame', '1'], ['paths', JSON.stringify(paths)]].forEach(function (kv) {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = kv[0];
+      input.value = kv[1];
+      form.appendChild(input);
+    });
+    document.body.appendChild(form);
+    form.submit();
+    form.remove();
+  };
+
+  fm.downloadFailed = function (message) {
+    fm.flash('<i class="bi bi-exclamation-triangle-fill me-2"></i>Download failed: ' + esc(message), 'danger', 0);
   };
 
   fm.newFolder = function () {
@@ -466,7 +487,7 @@ TC.fm = (() => {
     }
     msg += '\n\nThis cannot be undone.';
     if (!confirm(msg)) return;
-    fm.post({ action: 'fmDelete', paths: paths })
+    fm.post({ action: 'fmDelete', paths: JSON.stringify(paths) })
       .done(function (r) {
         if (r.error) { fm.showError(r); fm.refresh(); return; }
         if (fm.detailsPath && paths.some(function (p) { return fm.detailsPath === p || fm.detailsPath.indexOf(p + '/') === 0; })) {
@@ -565,7 +586,7 @@ TC.fm = (() => {
     if (!files.length || fm.uploading) return;
     if (!TC.lan) return;
     const dir = fm.path;
-    fm.post({ action: 'fmCheckUpload', path: dir, files: files.map(function (f) { return f.relPath; }) })
+    fm.post({ action: 'fmCheckUpload', path: dir, files: JSON.stringify(files.map(function (f) { return f.relPath; })) })
       .done(function (check) {
         if (check.error) { fm.showError(check); return; }
         if (!check.canWrite) {
@@ -643,7 +664,7 @@ TC.fm = (() => {
         try {
           const resp = await fetch(API + '?' + qs, {
             method: 'POST', body: f.file.slice(offset, end), signal: state.controller.signal,
-            headers: { 'Content-Type': 'application/octet-stream' }
+            headers: { 'Content-Type': 'application/octet-stream', 'X-Requested-With': 'XMLHttpRequest' }
           });
           r = await resp.json();
         } catch (e) {
@@ -773,6 +794,12 @@ TC.fm = (() => {
       fm.renderSelectionBar();
     });
     $('#fmDetails').on('click', '.fm-details-close', fm.hideDetails);
+    // Download errors reported by the hidden download frame.
+    window.addEventListener('message', function (e) {
+      const frame = document.getElementById('fmDownloadFrame');
+      if (e.origin !== location.origin || !frame || e.source !== frame.contentWindow) return;
+      if (e.data && typeof e.data.tcDownloadFailed === 'string') fm.downloadFailed(e.data.tcDownloadFailed);
+    });
 
     // Drag and drop files or whole folders onto the list.
     const zone = document.getElementById('fmMain');

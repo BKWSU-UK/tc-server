@@ -130,7 +130,7 @@ if [ "$TC_OS" = "alpine" ]; then
         "php${PHPV}-ctype" "php${PHPV}-fileinfo" \
         "php${PHPV}-phar" "php${PHPV}-openssl" \
         mplayer alsa-utils bc \
-        coreutils grep procps bash util-linux tzdata dcron pulseaudio-utils 2>/dev/null || \
+        coreutils grep findutils procps bash util-linux tzdata dcron pulseaudio-utils 2>/dev/null || \
     $SUDO apk add --no-cache \
         nginx git \
         "php${PHPV}" "php${PHPV}-fpm" "php${PHPV}-cli" \
@@ -138,7 +138,7 @@ if [ "$TC_OS" = "alpine" ]; then
         "php${PHPV}-ctype" "php${PHPV}-fileinfo" \
         "php${PHPV}-phar" "php${PHPV}-openssl" \
         mplayer alsa-utils bc \
-        coreutils grep procps bash util-linux tzdata dcron
+        coreutils grep findutils procps bash util-linux tzdata dcron
     $SUDO ln -sf "/usr/bin/php${PHPV}" /usr/bin/php
 else
     $SUDO apt update
@@ -583,6 +583,31 @@ case "$PI_MODEL" in
         fi
         ;;
 esac
+
+# 8e. Ownership fixer. Files copied into Music by another user (e.g. root over
+#     SSH, or Samba) can't be renamed or deleted by the app. A root cron job
+#     hands them to the app user every minute; see the script for the
+#     safeguards that make running it as root safe.
+echo "Installing the Music ownership fixer..."
+$SUDO install -o root -g root -m 0755 "$DEST_DIR/scripts/tc-fix-music-ownership.sh" \
+    /usr/local/sbin/tc-fix-music-ownership
+# Its safeguards need the kernel's hardlink/symlink protections. They are on
+# by default on systemd distros; make sure they are on everywhere.
+printf 'fs.protected_hardlinks = 1\nfs.protected_symlinks = 1\n' | \
+    $SUDO tee /etc/sysctl.d/60-trafficcontrol.conf > /dev/null
+$SUDO sysctl -p /etc/sysctl.d/60-trafficcontrol.conf > /dev/null 2>&1 || true
+MUSIC_REAL="$(cd "$DEST_DIR/Music" && pwd -P)"
+FIXER_CMD="/usr/local/sbin/tc-fix-music-ownership '$MUSIC_REAL' $APP_USER $APP_GROUP"
+if [ "$TC_OS" = "alpine" ]; then
+    $SUDO touch /etc/crontabs/root
+    $SUDO sed -i '/tc-fix-music-ownership/d' /etc/crontabs/root
+    echo "* * * * * $FIXER_CMD" | $SUDO tee -a /etc/crontabs/root > /dev/null
+else
+    printf '# Traffic Control: give the app user files copied into Music by others\n* * * * * root %s\n' \
+        "$FIXER_CMD" | $SUDO tee /etc/cron.d/trafficcontrol-ownership > /dev/null
+    $SUDO chmod 644 /etc/cron.d/trafficcontrol-ownership
+fi
+$SUDO /usr/local/sbin/tc-fix-music-ownership "$MUSIC_REAL" "$APP_USER" "$APP_GROUP"
 
 # 9. Add trafficcontrol.local to hosts file
 if ! grep -q "trafficcontrol.local" /etc/hosts; then

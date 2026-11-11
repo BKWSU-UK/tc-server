@@ -48,7 +48,10 @@ There is no build step — this is a ready-to-deploy web app with no package man
 | `php/tc.lib.php` | ~1,150 lines of functions: audio playback, volume/fade, bank holidays, file browser, ALSA device detection |
 | `php/cron.php` | Scheduler: checks `nextEventTime`, calls `playEntry()` if match; also restarts the Live Audio listener if needed |
 | `php/liveaudio.php` | Live Audio listener (detached): receives a UDP stream on port 5555 and pipes it to mplayer |
-| `js/tc.js` | ~1,650-line jQuery SPA: playlist CRUD, UI rendering, AJAX, volume UI, elFinder integration |
+| `js/tc.js` | ~1,650-line jQuery SPA: playlist CRUD, UI rendering, AJAX, volume UI, sound picker |
+| `php/filemanager.lib.php` | Music file manager backend (`fm*` actions in `tc.php`): listing, chunked uploads, mkdir/rename/delete, file/ZIP downloads, mplayer metadata (cached in `.tcsys/mediaInfo.JSON`), playlist reference rewriting on rename |
+| `js/tc-filemanager.js` | Music file manager UI (`TC.fm`), opened by the "Manage Music" button |
+| `scripts/tc-fix-music-ownership.sh` | Root cron helper (installed as `/usr/local/sbin/tc-fix-music-ownership`) that chowns files copied into Music by other users to the app user |
 | `index.html` | Main UI shell |
 | `run.sh` | Docker entrypoint: symlinks, permissions, starts nginx/php-fpm/cron |
 | `deploy.sh` | Bare-metal installer |
@@ -58,6 +61,7 @@ There is no build step — this is a ready-to-deploy web app with no package man
 - `playListDb.JSON` — current schedule/settings (JSON)
 - `playListDbDefault.JSON` — factory default template
 - `playListDb.lock` — file lock (40-second timeout) prevents race conditions
+- `mediaInfo.JSON` — cache of mplayer metadata per Music file (keyed by path, invalidated by size+mtime)
 - `scheduler_enabled` — flag file; scheduler only runs if this exists
 - `liveaudio_enabled` — flag file; Live Audio listener runs while this exists
 - `liveaudio.lock` / `liveaudio.pid` — held/written by the running listener; `liveaudio_receiving` exists while a stream is playing
@@ -98,6 +102,8 @@ There is no build step — this is a ready-to-deploy web app with no package man
 ### Security Model
 
 - `clientInSameSubnet()` in `tc.lib.php` restricts write operations (play, volume, file management) to LAN clients only — no authentication system.
+- File manager paths are validated per segment (`fmValidName`) and resolved with `realpath()` inside Music; dot-files (`.system` chimes, `.tcupload-*` partial uploads) are hidden and unaddressable; symlinks are never followed out of Music.
+- The ownership fixer runs as root over a tree the app user can write, so it must stay symlink/hardlink-safe: GNU `find -P ... -execdir chown -h`, Music dir must not be a symlink, and it refuses to run unless `fs.protected_hardlinks`/`protected_symlinks` are 1 (`deploy.sh` sets them). Install it root-owned outside the app tree; never run a script from the app tree as root.
 
 ### Audio System
 

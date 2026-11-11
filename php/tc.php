@@ -6,8 +6,6 @@
   ini_set('log_errors', 1);
   error_reporting(E_ALL);
   
-  define ( 'ELCONNECTOR', 'http://localhost' . dirname(dirname($_SERVER['PHP_SELF'])) . '/elfinder-2.x/php/connector.php');
-
   include('tc.lib.php');
   require_once('TrafficControl.class.php');
   $tc = new TrafficControl();
@@ -24,7 +22,7 @@
       case 'store':
             $tc->getLock('store');
         if (isset($_REQUEST['tcPersistent'])) {
-              $stored = $tc->loadStored();
+              $stored = $tc->loadStored(true);
               $newStore = json_decode(rawurldecode($_REQUEST['tcPersistent']));
 
           //Preserve item-specific remote items
@@ -122,7 +120,7 @@
             if (isset($_REQUEST['index'])) {
               $index = (int)$_REQUEST['index'];
               $tc->getLock('directorySelect');
-              $tc->loadStored();
+              $stored = $tc->loadStored(true);
               directorySelect($index);
               $tc->saveStored();
               $tc->releaseLock('directorySelect');
@@ -199,48 +197,51 @@
             echo json_encode(listAllSounds($phash), JSON_PRETTY_PRINT);
             error_reporting($oldErrorLevel);
             break;
-          case 'createFolder':
-            if (!clientInSameSubnet()) {
-              http_response_code(403);
-              header('Content-Type: application/json');
-              die(json_encode(['error' => 'Not allowed from WAN']));
-            }
-            $path = isset($_REQUEST['path']) ? $_REQUEST['path'] : '';
-            $name = isset($_REQUEST['name']) ? $_REQUEST['name'] : '';
+          #Music file manager. Reading is allowed from anywhere (Music is
+          #served statically anyway); changes only from the LAN.
+          case 'fmList':
+          case 'fmInfo':
+          case 'fmDetails':
+          case 'fmMkdir':
+          case 'fmRename':
+          case 'fmDelete':
+          case 'fmCheckUpload':
+          case 'fmUpload':
+            $fmAction = $_REQUEST['action'];
+            $fmWrite = in_array($fmAction, ['fmMkdir', 'fmRename', 'fmDelete', 'fmCheckUpload', 'fmUpload'], true);
             header('Content-Type: application/json');
-            echo json_encode(createFolder($path, $name));
+            if ($fmWrite && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+              http_response_code(405);
+              die(json_encode(['error' => 'POST required']));
+            }
+            // Writes must come from this page's own scripts: a custom header
+            // can't be added by another site without a CORS preflight, which
+            // the server never grants (blocks CSRF from pages on the LAN).
+            if ($fmWrite && ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'XMLHttpRequest') {
+              http_response_code(403);
+              die(json_encode(['error' => 'Request rejected']));
+            }
+            if ($fmWrite && !clientInSameSubnet()) {
+              http_response_code(403);
+              die(json_encode(['error' => 'Files can only be changed from the local network']));
+            }
+            switch ($fmAction) {
+              case 'fmList':        $fmResult = fmList($_REQUEST['path'] ?? ''); break;
+              case 'fmInfo':        $fmResult = fmInfoBatch($_REQUEST['path'] ?? '', $_REQUEST['names'] ?? []); break;
+              case 'fmDetails':     $fmResult = fmDetails($_REQUEST['path'] ?? ''); break;
+              case 'fmMkdir':       $fmResult = fmMkdir($_REQUEST['path'] ?? '', $_REQUEST['name'] ?? ''); break;
+              case 'fmRename':      $fmResult = fmRename($_REQUEST['path'] ?? '', $_REQUEST['newName'] ?? ''); break;
+              case 'fmDelete':      $fmResult = fmDelete($_REQUEST['paths'] ?? []); break;
+              case 'fmCheckUpload': $fmResult = fmCheckUpload($_REQUEST['path'] ?? '', $_REQUEST['files'] ?? []); break;
+              case 'fmUpload':      $fmResult = fmUploadChunk($_GET); break;
+            }
+            if (!clientInSameSubnet() && is_array($fmResult)) {
+              unset($fmResult['permissions']);   // don't reveal server paths/users off the LAN
+            }
+            echo json_encode($fmResult, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
             break;
-          case 'deleteItem':
-            if (!clientInSameSubnet()) {
-              http_response_code(403);
-              header('Content-Type: application/json');
-              die(json_encode(['error' => 'Not allowed from WAN']));
-            }
-            $path = isset($_REQUEST['path']) ? $_REQUEST['path'] : '';
-            header('Content-Type: application/json');
-            echo json_encode(deleteItem($path));
-            break;
-          case 'renameItem':
-            if (!clientInSameSubnet()) {
-              http_response_code(403);
-              header('Content-Type: application/json');
-              die(json_encode(['error' => 'Not allowed from WAN']));
-            }
-            $path = isset($_REQUEST['path']) ? $_REQUEST['path'] : '';
-            $newName = isset($_REQUEST['newName']) ? $_REQUEST['newName'] : '';
-            header('Content-Type: application/json');
-            echo json_encode(renameItem($path, $newName));
-            break;
-          case 'uploadFile':
-            if (!clientInSameSubnet()) {
-              http_response_code(403);
-              header('Content-Type: application/json');
-              die(json_encode(['error' => 'Not allowed from WAN']));
-            }
-            checkPhpExtensions ();
-            $path = isset($_REQUEST['path']) ? $_REQUEST['path'] : '';
-            header('Content-Type: application/json');
-            echo json_encode(uploadFiles($path, $_FILES));
+          case 'fmDownload':
+            fmDownload($_REQUEST['paths'] ?? []);
             break;
       case 'time':
             $tc->loadStored();

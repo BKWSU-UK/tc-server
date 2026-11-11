@@ -20,7 +20,12 @@ class TrafficControl {
         }
     }
 
-    public function loadStored(): stdClass {
+    // $reload re-reads the file (use after getLock() before modifying it:
+    // the cached copy may predate changes made by the scheduler).
+    public function loadStored(bool $reload = false): stdClass {
+        if ($reload) {
+            $this->stored = null;
+        }
         if ($this->stored === null) {
             if (file_exists(PERSISTENTFILE)) {
                 $content = file_get_contents(PERSISTENTFILE);
