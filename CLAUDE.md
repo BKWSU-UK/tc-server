@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Traffic Control is a PHP/JavaScript web application for scheduling timed audio announcements and music playback on Linux (primarily Raspberry Pi). It targets institutional use cases (e.g., timed chimes, announcements) and supports two deployment modes:
 
 - **Home Assistant add-on**: Docker container (Nginx + PHP-FPM), persistent storage in `/data`
-- **Bare-metal**: Direct install via `deploy.sh` on Debian/Raspberry Pi OS
+- **Bare-metal**: Direct install via `deploy.sh` on Debian/Raspberry Pi OS or Alpine (OpenRC). On Alpine sys installs with root on `/dev/mmcblk*`, `deploy.sh` also reduces SD card wear (syslog to RAM, `noatime`, size-capped tmpfs `/tmp` and `/var/log` recreated at boot by `/etc/init.d/tc-varlog-dirs`, nginx access log off); `TC_SD_WEAR=on|off` overrides, and an explicit `off` undoes an earlier run. On Alpine it also enables chrony if no NTP client is enabled, refuses to run on a diskless Alpine without persistent storage, and on a Raspberry Pi with no sound card adds `dtparam=audio=on`. Steps needing a reboot call `reboot_needed`, and the script ends by telling the user to reboot. Keep the README minimal: put checks and fixes in `deploy.sh`, not in user instructions. `deploy.sh` must stay BusyBox `sh`-compatible on the Alpine path.
 
 ## Deployment & Running
 

@@ -53,107 +53,84 @@ Traffic Control can run as a Home Assistant add-on, which handles all dependenci
 
 **For Alpine (including Alpine on Raspberry Pi):**
 
-Alpine minimal does not include sudo by default. Run as root.
+Run every command below as root (Alpine has no `sudo`).
 
-**IMPORTANT: Convert Alpine from diskless to traditional installation first**
+##### Step 1: Install Alpine onto the SD card
 
-Alpine on Raspberry Pi installs in diskless mode by default (root filesystem in RAM). Convert to a traditional installation where the root filesystem is on persistent storage.
+Alpine on a Raspberry Pi starts in "diskless" mode, where everything runs from RAM and is lost at reboot. Traffic Control needs Alpine installed onto the SD card itself.
 
-**Install to SD card (recommended):**
+> **Warning:** this erases the SD card you booted from.
 
-The Raspberry Pi firmware requires a FAT32 boot partition. The default diskless boot partition (129M) is too small for a full kernel install. First repartition to create a larger boot partition, then create an ext4 root partition:
+First run `setup-alpine`. When it asks, choose `chrony` as the NTP client and an online package mirror. Then repartition the card into a 512M FAT32 boot partition and an ext4 root, and install onto it:
 
-```bash
-# Install partition management tools (fdisk and mdev are built into BusyBox)
+```sh
 apk add e2fsprogs dosfstools
+modprobe ext4; modprobe vfat      # load these before the module image is unmounted
+umount /.modloop /media/mmcblk0p1 2>/dev/null
 
-# Unmount the kernel modules loop mount first (holds the boot partition busy)
-umount /.modloop 2>/dev/null || true
-
-# Unmount the existing boot partition before repartitioning
-umount /media/mmcblk0p1 2>/dev/null || true
-
-# Repartition the SD card: resize boot to 512M, create ext4 root for remaining space
 fdisk /dev/mmcblk0
-# d, then Enter (delete existing partitions)
-# n, p, 1, Enter, +512M           -> new boot partition (512M)
-# t, c                            -> set type to W95 FAT32 (LBA)
-# n, p, 2, Enter, Enter           -> new root partition (remaining space)
-# w                                -> write changes
+#   d                          -> delete the existing partition (repeat if there are several)
+#   n, p, 1, Enter, +512M      -> new boot partition
+#   t, c                       -> set its type to W95 FAT32 (LBA)
+#   n, p, 2, Enter, Enter      -> new root partition (rest of the card)
+#   w                          -> write the changes and exit
 
-# Recreate device nodes for the new partitions (Alpine uses mdev, not udev)
 mdev -s
-
-# Format the partitions
 mkfs.vfat -F 32 /dev/mmcblk0p1
 mkfs.ext4 /dev/mmcblk0p2
-
-# Mount root, then boot inside it
-mkdir -p /mnt/alpine-root
-mount /dev/mmcblk0p2 /mnt/alpine-root
-mkdir -p /mnt/alpine-root/boot
-mount /dev/mmcblk0p1 /mnt/alpine-root/boot
-
-# Install Alpine to the mounted root
-setup-disk -m sys /mnt/alpine-root
-
-# Reboot to boot from the new installation
+mount /dev/mmcblk0p2 /mnt
+mkdir -p /mnt/boot
+mount /dev/mmcblk0p1 /mnt/boot
+setup-disk -m sys /mnt
 reboot
 ```
 
-`setup-disk` will configure `/etc/fstab` automatically for both partitions.
+##### Step 2: Deploy Traffic Control
 
-**Deployment after conversion:**
-```bash
-su -
+```sh
 apk add git
 git clone https://github.com/BKWSU-UK/tc-server.git /var/www/html/trafficcontrol
-cd /var/www/html/trafficcontrol
-sh deploy.sh
+sh /var/www/html/trafficcontrol/deploy.sh
 ```
 
-    Or set up manually:
+If the script ends by asking you to reboot, run `reboot`.
 
-    **Debian/Ubuntu/Raspberry Pi OS:**
-    ```bash
-    cd /var/www/html/trafficcontrol
-    mkdir .tcsys
-    sudo chown -R www-data:www-data .tcsys Music
-    sudo chmod -R 775 .tcsys Music
-    sudo apt install mplayer alsa-utils bc
-    ```
+`deploy.sh` installs and configures everything. It also makes sure network time sync is running, enables the Pi's onboard audio if no sound card is found, and stops if Alpine is still running diskless. To reduce SD card wear, it moves the system logs and `/tmp` into size-limited RAM, mounts `/` with `noatime`, and turns off the nginx access log. To skip the SD card changes, run `TC_SD_WEAR=off sh /var/www/html/trafficcontrol/deploy.sh`; that also undoes them if an earlier run applied them.
 
-    **Alpine (including Alpine on Raspberry Pi):**
-    Alpine minimal does not include sudo by default. Run as root:
-    ```bash
-    su -
-    cd /var/www/html/trafficcontrol
-    mkdir .tcsys
-    chown -R www-data:www-data .tcsys Music
-    chmod -R 775 .tcsys Music
-    apk add mplayer alsa-utils bc coreutils grep procps bash util-linux
-    ```
+#### Manual setup (instead of `deploy.sh`)
 
-3.  **Configure the cron job** (if not using `deploy.sh`):
+`deploy.sh` is the supported route. If you set things up by hand, match what it does:
 
-    **Debian/Ubuntu/Raspberry Pi OS:**
-    ```bash
-    sudo crontab -u www-data -e
-    ```
-    Add:
-    ```cron
-    * * * * * /usr/bin/php /var/www/html/trafficcontrol/php/cron.php > /dev/null 2>&1
-    ```
+**Debian/Ubuntu/Raspberry Pi OS:**
+```bash
+cd /var/www/html/trafficcontrol
+mkdir -p .tcsys Music
+sudo apt install nginx php-fpm php-mbstring mplayer alsa-utils bc
+sudo usermod -aG audio www-data
+sudo chown -R www-data:www-data .tcsys Music
+```
+Then add a cron job for `www-data` (`sudo crontab -u www-data -e`):
+```cron
+* * * * * /usr/bin/php /var/www/html/trafficcontrol/php/cron.php >> /var/www/html/trafficcontrol/.tcsys/cron.log 2>&1
+```
 
-    **Alpine (including Alpine on Raspberry Pi):**
-    Run as root:
-    ```bash
-    crontab -u www-data -e
-    ```
-    Add (BusyBox crond format, no user field):
-    ```cron
-    * * * * * /usr/bin/php /var/www/html/trafficcontrol/php/cron.php > /dev/null 2>&1
-    ```
+**Alpine:** (as root; replace `83` with your PHP series)
+```sh
+cd /var/www/html/trafficcontrol
+mkdir -p .tcsys Music
+apk add nginx php83 php83-fpm php83-cli php83-mbstring php83-session php83-ctype \
+    php83-fileinfo php83-phar php83-openssl mplayer alsa-utils bc \
+    coreutils grep procps bash util-linux tzdata
+addgroup -S trafficcontrol
+adduser -S -D -H -s /sbin/nologin -G trafficcontrol trafficcontrol
+addgroup trafficcontrol audio
+chown -R trafficcontrol:trafficcontrol .
+```
+Then set `user`/`group` to `trafficcontrol` in `/etc/php83/php-fpm.d/www.conf`, install `trafficcontrol.nginx.conf` as `/etc/nginx/http.d/trafficcontrol.conf` (replacing `PHP_FPM_PASS` with `127.0.0.1:9000`), and remove `/etc/nginx/http.d/default.conf`. Finally, create `/etc/crontabs/trafficcontrol`. Its format is BusyBox crond, with no user field:
+```cron
+* * * * * /usr/bin/php /var/www/html/trafficcontrol/php/cron.php >> /var/www/html/trafficcontrol/.tcsys/cron.log 2>&1
+```
+and enable the services with `rc-update add nginx default`, `rc-update add php-fpm83 default` and `rc-update add crond default`.
 
 ## Configuration
 
@@ -169,7 +146,7 @@ Logs will be written to `.tcsys/debug.log`. When running as an HA add-on, `.tcsy
 
 ## Using the Web Interface
 
-Access the application at `http://your-pi-ip/trafficcontrol/index.html`.
+Access the application at `http://your-pi-ip/`.
 
 ### Playlists
 

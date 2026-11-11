@@ -27,6 +27,21 @@ DATA_DIR="${TC_DATA_DIR:-}"
 # shellcheck source=scripts/os-detect.sh
 source "$SCRIPT_DIR/scripts/os-detect.sh"
 
+# True if $1 is a directory with a filesystem mounted on it. An empty
+# /media/usb (always present on Alpine) does not count as persistent storage.
+is_mounted_dir() {
+    [ -d "$1" ] && awk -v d="$1" '$2 == d { found = 1 } END { exit !found }' /proc/mounts
+}
+
+# Steps that need a reboot record why; the final message lists them.
+REBOOT_REASONS=""
+reboot_needed() {
+    case "$REBOOT_REASONS" in
+        *"$1"*) ;;
+        *) REBOOT_REASONS="${REBOOT_REASONS:+$REBOOT_REASONS;} $1" ;;
+    esac
+}
+
 # Use sudo only when not already root (Alpine minimal has no sudo).
 if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
 
@@ -39,13 +54,48 @@ if [ "$TC_OS" = "alpine" ]; then
     fi
 fi
 
+# A diskless Alpine (root in RAM) usually means the SD card has not been
+# converted to a sys install yet. Stop before installing anything unless
+# persistent storage for the app is available.
+if [ "$DISKLESS_MODE" = true ] && [ -z "$DATA_DIR" ]; then
+    HAVE_DATA_DIR=false
+    for loc in /mnt/data /media/usb /srv/data; do
+        if is_mounted_dir "$loc" && [ -w "$loc" ]; then HAVE_DATA_DIR=true; fi
+    done
+    if [ "$HAVE_DATA_DIR" = false ]; then
+        echo "Error: Alpine is running diskless (the root filesystem is in RAM),"
+        echo "so Traffic Control would be lost at the next reboot."
+        echo "Install Alpine onto the SD card first (README: 'For Alpine', Step 1),"
+        echo "reboot, and then run this script again."
+        echo "(Advanced: to stay diskless, mount persistent storage and run"
+        echo " TC_DATA_DIR=/mnt/data sh deploy.sh)"
+        exit 1
+    fi
+fi
+
 # If DATA_DIR is explicitly set, use it regardless of diskless detection
 if [ -n "$DATA_DIR" ]; then
     echo "Using persistent data directory: $DATA_DIR"
     DISKLESS_MODE=true
 fi
 
-echo "Starting deployment to $DEST_DIR (OS: $TC_OS, app user: $APP_USER, nginx: $NGINX_USER, diskless: $DISKLESS_MODE)..."
+# Reduce SD card wear (step 8b) on Alpine "sys" installs whose root filesystem
+# is on an SD card/eMMC: logs go to RAM, / is mounted noatime, and the nginx
+# access log (written on every UI poll) is turned off.
+# Override with TC_SD_WEAR=on|off. It only applies to Alpine sys installs
+# (it relies on OpenRC and BusyBox syslogd; diskless mode already runs in RAM).
+SD_WEAR=off
+if [ "$TC_OS" = "alpine" ] && [ "$DISKLESS_MODE" = false ]; then
+    # Use the last "/" entry: /proc/mounts may also list an initial rootfs.
+    case "$(awk '$2 == "/" { dev = $1 } END { print dev }' /proc/mounts)" in
+        /dev/mmcblk*) SD_WEAR=on ;;
+    esac
+    case "${TC_SD_WEAR:-}" in
+        on|off) SD_WEAR="$TC_SD_WEAR" ;;
+    esac
+fi
+
+echo "Starting deployment to $DEST_DIR (OS: $TC_OS, app user: $APP_USER, nginx: $NGINX_USER, diskless: $DISKLESS_MODE, SD wear reduction: $SD_WEAR)..."
 
 # 1. Install required packages
 echo "Installing required packages..."
@@ -167,7 +217,7 @@ if [ "$DISKLESS_MODE" = true ]; then
         echo ""
         # Try common locations
         for loc in /mnt/data /media/usb /srv/data; do
-            if [ -d "$loc" ] && [ -w "$loc" ]; then
+            if is_mounted_dir "$loc" && [ -w "$loc" ]; then
                 DATA_DIR="$loc"
                 echo "Auto-detected writable persistent storage: $DATA_DIR"
                 break
@@ -252,6 +302,11 @@ echo "All dependencies verified."
 echo "Installing nginx configuration..."
 TMP_CONF="$(mktemp)"
 sed "s|PHP_FPM_PASS|${TC_FASTCGI_PASS}|g" "$DEST_DIR/trafficcontrol.nginx.conf" > "$TMP_CONF"
+if [ "$SD_WEAR" = on ]; then
+    # The UI polls tc.php every 2 s, so the access log is the largest steady
+    # writer. Turn it off rather than fill the size-capped tmpfs /var/log.
+    sed -i 's|^\([[:space:]]*\)access_log .*|\1access_log off;|' "$TMP_CONF"
+fi
 if [ "$TC_OS" = "alpine" ]; then
     $SUDO mkdir -p /etc/nginx/http.d
     $SUDO cp "$TMP_CONF" /etc/nginx/http.d/trafficcontrol.conf
@@ -322,6 +377,213 @@ EOF
     echo "Created system cron at $CRON_FILE"
 fi
 
+# 8b. Reduce SD card wear (Alpine sys install on SD/eMMC; see SD_WEAR above).
+#     Everything here is idempotent, so re-running deploy.sh is safe. The
+#     /var/log tmpfs takes effect at the next reboot.
+if [ "$SD_WEAR" = on ]; then
+    echo "Reducing SD card writes (set TC_SD_WEAR=off to skip)..."
+
+    # a) BusyBox syslogd: log to a 256 KB RAM ring buffer (read with `logread`)
+    #    instead of /var/log/messages.
+    SYSLOG_CONF=/etc/conf.d/syslog
+    if [ -f "$SYSLOG_CONF" ] && [ -x /etc/init.d/syslog ]; then
+        OLD_SYSLOGD_OPTS="$(. "$SYSLOG_CONF" >/dev/null 2>&1; printf '%s' "${SYSLOGD_OPTS:-}")" || true
+        case " $OLD_SYSLOGD_OPTS " in
+            *" -C"*) echo "syslogd already logs to RAM" ;;
+            *)
+                NEW_SYSLOGD_OPTS="${OLD_SYSLOGD_OPTS:+$OLD_SYSLOGD_OPTS }-C256"
+                [ -f "$SYSLOG_CONF.tc-orig" ] || $SUDO cp -p "$SYSLOG_CONF" "$SYSLOG_CONF.tc-orig"
+                $SUDO sed -i 's/^[[:space:]]*SYSLOGD_OPTS=/#&/' "$SYSLOG_CONF"
+                printf '# Traffic Control deploy.sh: log to a RAM ring buffer (read with logread)\nSYSLOGD_OPTS="%s"\n' \
+                    "$NEW_SYSLOGD_OPTS" | $SUDO tee -a "$SYSLOG_CONF" > /dev/null
+                $SUDO rc-service syslog restart 2>/dev/null || true
+                echo "syslogd now logs to RAM (SYSLOGD_OPTS=\"$NEW_SYSLOGD_OPTS\")"
+                ;;
+        esac
+    else
+        echo "BusyBox syslog service not found; leaving system logging unchanged"
+    fi
+
+    # b) /etc/fstab: noatime on /, a size cap on a tmpfs /tmp, and a size-capped
+    #    tmpfs /var/log. Existing /tmp or /var/log entries that are not tmpfs are
+    #    left alone. The original is kept once as /etc/fstab.tc-orig.
+    [ -f /etc/fstab.tc-orig ] || $SUDO cp -p /etc/fstab /etc/fstab.tc-orig
+    TMP_FSTAB="$(mktemp)"
+    awk '
+        function setopt(opts, drop, add,   n, a, i, out) {
+            n = split(opts, a, ",")
+            out = ""
+            for (i = 1; i <= n; i++) {
+                if (a[i] ~ drop) continue
+                out = out (out == "" ? "" : ",") a[i]
+            }
+            return out (out == "" ? "" : ",") add
+        }
+        /^[[:space:]]*(#|$)/ || NF < 4 { print; next }
+        $2 == "/" && $4 !~ /(^|,)noatime(,|$)/ {
+            $4 = setopt($4, "^(atime|relatime|norelatime|strictatime|nostrictatime)$", "noatime")
+            print; next
+        }
+        $2 == "/tmp" { tmp = 1 }
+        $2 == "/tmp" && $3 == "tmpfs" && $4 !~ /(^|,)size=/ {
+            $4 = setopt($4, "^$", "size=64m")
+            print; next
+        }
+        $2 == "/var/log" { varlog = 1 }
+        { print }
+        END {
+            if (!tmp)    print "tmpfs\t/tmp\ttmpfs\trw,nosuid,nodev,mode=1777,size=64m\t0 0"
+            if (!varlog) print "tmpfs\t/var/log\ttmpfs\trw,nosuid,nodev,noexec,mode=0755,size=16m\t0 0"
+        }
+    ' OFS='\t' /etc/fstab > "$TMP_FSTAB"
+    if cmp -s "$TMP_FSTAB" /etc/fstab; then
+        echo "/etc/fstab already configured"
+    else
+        # Replace atomically (copy keeps the owner and permissions, then rename)
+        # so a power cut mid-write can never leave an empty /etc/fstab.
+        $SUDO cp -p /etc/fstab /etc/fstab.tc-new
+        $SUDO sh -c "cat '$TMP_FSTAB' > /etc/fstab.tc-new"
+        $SUDO sync
+        $SUDO mv -f /etc/fstab.tc-new /etc/fstab
+        echo "Updated /etc/fstab (original saved as /etc/fstab.tc-orig)"
+    fi
+    rm -f "$TMP_FSTAB"
+    # Apply what can be applied live; the rest takes effect at the next boot.
+    $SUDO mount -o remount,noatime / 2>/dev/null || true
+    if awk '$2 == "/tmp" && $3 == "tmpfs" { found = 1 } END { exit !found }' /proc/mounts; then
+        TMP_SIZE="$(awk '$2 == "/tmp" && $3 == "tmpfs" { n = split($4, a, ","); for (i = 1; i <= n; i++) if (a[i] ~ /^size=/) s = substr(a[i], 6) } END { print s }' /etc/fstab)"
+        [ -z "$TMP_SIZE" ] || $SUDO mount -o "remount,size=$TMP_SIZE" /tmp 2>/dev/null || true
+    fi
+
+    # c) A tmpfs /var/log starts empty at every boot, but nginx and php-fpm
+    #    refuse to start without their log directories. Install a boot service
+    #    that recreates every directory currently under /var/log with the same
+    #    owner and mode (plus the ones nginx and php-fpm need).
+    VARLOG_INIT=/etc/init.d/tc-varlog-dirs
+    VARLOG_DIRS="$(mktemp)"
+    find /var/log -mindepth 1 -type d 2>/dev/null | while IFS= read -r d; do
+        printf '%s %s %s\n' "$d" "$(stat -c '%U:%G' "$d")" "$(stat -c '%a' "$d")"
+    done > "$VARLOG_DIRS"
+    for d in /var/log/nginx "/var/log/php${TC_PHP_NODOT}"; do
+        grep -q "^$d " "$VARLOG_DIRS" || printf '%s root:root 755\n' "$d" >> "$VARLOG_DIRS"
+    done
+    TMP_INIT="$(mktemp)"
+    {
+        echo '#!/sbin/openrc-run'
+        echo '# Generated by Traffic Control deploy.sh; regenerated on every deploy.'
+        echo 'description="Recreate log directories on a tmpfs /var/log"'
+        echo ''
+        echo 'depend() {'
+        echo '	need localmount'
+        echo "	before logger syslog nginx php-fpm${TC_PHP_NODOT} crond dcron chronyd"
+        echo '}'
+        echo ''
+        echo 'start() {'
+        echo '	ebegin "Recreating /var/log directories"'
+        echo '	rc=0'
+        sort "$VARLOG_DIRS" | while read -r d owner mode; do
+            printf '\tcheckpath -d -o %s -m 0%s "%s" || rc=1\n' "$owner" "$mode" "$d"
+        done
+        echo '	eend $rc'
+        echo '}'
+    } > "$TMP_INIT"
+    $SUDO cp "$TMP_INIT" "$VARLOG_INIT"
+    $SUDO chmod 755 "$VARLOG_INIT"
+    rm -f "$TMP_INIT" "$VARLOG_DIRS"
+    $SUDO rc-update add tc-varlog-dirs boot 2>/dev/null || true
+
+    if awk '$2 == "/var/log" && $3 == "tmpfs" { found = 1 } END { exit !found }' /etc/fstab; then
+        awk '$2 == "/var/log" && $3 == "tmpfs" { found = 1 } END { exit !found }' /proc/mounts || \
+            reboot_needed "to move /var/log into RAM"
+    else
+        echo "/etc/fstab already mounts /var/log from other storage; leaving it on disk"
+    fi
+fi
+
+# Undo step 8b when explicitly asked (TC_SD_WEAR=off) after an earlier deploy
+# applied it. The nginx access log is already back on (step 7).
+if [ "$TC_OS" = "alpine" ] && [ "${TC_SD_WEAR:-}" = off ] && \
+   { [ -f /etc/fstab.tc-orig ] || [ -f /etc/conf.d/syslog.tc-orig ] || [ -f /etc/init.d/tc-varlog-dirs ]; }; then
+    echo "Undoing SD card wear reduction (TC_SD_WEAR=off)..."
+    if [ -f /etc/fstab.tc-orig ]; then
+        # Keep the current file in case it was edited since the first deploy.
+        $SUDO cp -p /etc/fstab /etc/fstab.tc-sdwear
+        $SUDO cp -p /etc/fstab.tc-orig /etc/fstab.tc-new
+        $SUDO sync
+        $SUDO mv -f /etc/fstab.tc-new /etc/fstab
+        $SUDO rm -f /etc/fstab.tc-orig
+        echo "Restored /etc/fstab (the previous version is saved as /etc/fstab.tc-sdwear)"
+    fi
+    if [ -f /etc/conf.d/syslog.tc-orig ]; then
+        $SUDO mv -f /etc/conf.d/syslog.tc-orig /etc/conf.d/syslog
+        $SUDO rc-service syslog restart 2>/dev/null || true
+        echo "Restored /etc/conf.d/syslog"
+    fi
+    $SUDO rc-update del tc-varlog-dirs boot 2>/dev/null || true
+    $SUDO rm -f /etc/init.d/tc-varlog-dirs
+    reboot_needed "to finish undoing the SD card wear reduction"
+fi
+
+# 8c. Make sure the clock stays correct (Alpine). The Pi has no real-time
+#     clock, and the scheduler is useless with the wrong time.
+if [ "$TC_OS" = "alpine" ]; then
+    if rc-update show 2>/dev/null | grep -qE '^[[:space:]]*(chronyd|ntpd|openntpd)[[:space:]]'; then
+        echo "Network time sync is already enabled"
+    else
+        echo "Enabling network time sync (chrony)..."
+        $SUDO apk add --no-cache chrony
+        $SUDO rc-update add chronyd default 2>/dev/null || true
+        $SUDO rc-service chronyd start 2>/dev/null || true
+    fi
+fi
+
+# 8d. Raspberry Pi with no sound card: enable the onboard audio (headphone
+#     jack/HDMI), which needs a firmware setting and a reboot. A USB sound
+#     card, or an existing dtparam=audio line, is left alone.
+PI_MODEL="$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)"
+BOOT_ID="$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || true)"
+case "$PI_MODEL" in
+    *"Raspberry Pi"*)
+        if ! grep -qE '^ *[0-9]+ \[' /proc/asound/cards 2>/dev/null; then
+            PI_CFG=""
+            for f in /boot/firmware/config.txt /boot/config.txt; do
+                if [ -f "$f" ]; then PI_CFG="$f"; break; fi
+            done
+            # Alpine keeps user settings in usercfg.txt, included from config.txt.
+            if [ -n "$PI_CFG" ] && grep -q '^include usercfg.txt' "$PI_CFG"; then
+                PI_USERCFG="$(dirname "$PI_CFG")/usercfg.txt"
+            else
+                PI_USERCFG="$PI_CFG"
+            fi
+            if [ -z "$PI_CFG" ]; then
+                echo "Warning: no sound card found and no Raspberry Pi config.txt to enable onboard audio"
+            elif grep -q '^# Added by Traffic Control deploy.sh: onboard audio' "$PI_USERCFG" 2>/dev/null; then
+                # Added by an earlier run. Only ask for a reboot if it was added
+                # during this boot; after a reboot, there is nothing more to try.
+                if grep -q "^# Added by Traffic Control deploy.sh: onboard audio (boot $BOOT_ID)" "$PI_USERCFG"; then
+                    reboot_needed "to enable the onboard audio"
+                else
+                    echo "Warning: onboard audio is enabled in $PI_USERCFG but no sound card was found."
+                    echo "Some models (e.g. Pi 5, Pi Zero) have no headphone jack; use a USB or HAT sound card."
+                fi
+            elif cat "$PI_CFG" "$PI_USERCFG" 2>/dev/null | grep -q '^[[:space:]]*dtparam=audio='; then
+                echo "Warning: no sound card found, but dtparam=audio is already set in $PI_CFG or $PI_USERCFG"
+            else
+                echo "No sound card found: enabling the Raspberry Pi onboard audio in $PI_USERCFG"
+                # [all] ends any model-specific section that config.txt might end in.
+                printf '[all]\n# Added by Traffic Control deploy.sh: onboard audio (boot %s)\ndtparam=audio=on\n' "$BOOT_ID" | \
+                    $SUDO tee -a "$PI_USERCFG" > /dev/null
+                reboot_needed "to enable the onboard audio"
+            fi
+        fi
+        ;;
+    *)
+        if ! grep -qE '^ *[0-9]+ \[' /proc/asound/cards 2>/dev/null; then
+            echo "Warning: no sound card found. Connect one (or check its driver) for audio output."
+        fi
+        ;;
+esac
+
 # 9. Add trafficcontrol.local to hosts file
 if ! grep -q "trafficcontrol.local" /etc/hosts; then
     echo "Adding trafficcontrol.local to /etc/hosts..."
@@ -361,3 +623,7 @@ echo "If this is the first deployment, restart php-fpm (done above) for the $APP
 echo ""
 echo "To update the application later, re-run this script (it fetches the latest"
 echo "'$BRANCH') or run: sudo git -C $DEST_DIR pull"
+if [ -n "$REBOOT_REASONS" ]; then
+    echo ""
+    echo "*** Reboot now to finish:$REBOOT_REASONS ***"
+fi
