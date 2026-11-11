@@ -63,6 +63,9 @@
       touch(LIVEAUDIO_RECEIVING);
       debugLog('Live Audio: receiving stream, stopping any scheduled playback');
       stopPlayer();
+      // Set the sound card to the Live Audio volume, as a playlist entry
+      // would (after stopPlayer(), which may restore an entry's level).
+      applyLiveAudioMixerVolume(getLiveAudioVolume());
     } else {
       @unlink(LIVEAUDIO_RECEIVING);
       debugLog('Live Audio: stream ended');
@@ -79,11 +82,13 @@
     // -afm ffmpeg,: prefer FFmpeg's decoders. mplayer's mpg123 decoder glitches on
     // MP3 packets from the libavformat MPEG-TS demuxer (e.g. ffmpeg -f mpegts);
     // the trailing comma falls back to other decoders for formats FFmpeg can't do.
-    // -softvol: volume is applied in software, so it works the same on ALSA and
-    // PulseAudio and leaves the hardware mixer level used by playlist entries alone.
-    // -input file: volume changes from the UI arrive through LIVEAUDIO_FIFO.
+    // Volume: with a sound card mixer, the card is set to the Live Audio volume
+    // like a playlist entry (setReceiving()) and mplayer plays at full level.
+    // Without one, -softvol applies the volume in software.
+    // -input file: software volume changes from the UI arrive through LIVEAUDIO_FIFO.
+    $gain = liveAudioMixer() !== null ? 100 : liveAudioGain(getLiveAudioVolume());
     $command = 'exec mplayer -quiet -cache 256 -demuxer lavf -afm ffmpeg, ' . $audioOutput . ' -vo null'
-      . ' -softvol -softvol-max 100 -volume ' . liveAudioGain(getLiveAudioVolume())
+      . ' -softvol -softvol-max 100 -volume ' . $gain
       . ' -input file=' . escapeshellarg(LIVEAUDIO_FIFO)
       . ' -title ' . escapeshellarg(LIVEAUDIO_URL) . ' -';
     $process = proc_open($command, [0 => ['pipe', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);

@@ -515,6 +515,19 @@ function calculateBankHolidays($yr) {
     debugLog("devCardInfo :" . $devCardInfo . ", controlId : " . $controlId . ", Current level : " . $level . ", is mapped : " . $isMapped);
   }
 
+  // The amixer command that sets the sound card to $volume (0-99): a dB
+  // level on mixers with a dB scale ("mapped"), otherwise a log-scaled
+  // percentage. Shared by playlist entries and Live Audio so both sound the same.
+  function mixerVolumeCommand(string $devCardInfo, string $controlId, bool $isMapped, int $volume): string {
+    $escapedControlId = escapeshellarg($controlId);
+    if ($isMapped) {
+      return 'amixer ' . $devCardInfo . ' -M set ' . $escapedControlId . ' -- ' . voltoDb($volume) . 'dB unmute >/dev/null 2>&1';
+    }
+    //Convert linear volume to log volume scale on 0-100%
+    $logVolume = ($volume > 0) ? intval(100 - ((0 - log10($volume / 100)) * 50)) : 0;
+    return 'amixer ' . $devCardInfo . ' cset ' . $escapedControlId . ' ' . $logVolume . '% unmute >/dev/null 2>&1';
+  }
+
   function setPlayerVolumeAndLength ($index, $setLength, $id, $oldId, $chime, $audioOutput, $unused = '') {
     global $stored;
 
@@ -542,14 +555,9 @@ function calculateBankHolidays($yr) {
     prepareMixer ($oldId, $devCardInfo, $controlId, $initialLevel, $isMapped);
     $hasMixerControl = strlen($controlId) > 1;
     if ($hasMixerControl) {
-      $escapedControlId = escapeshellarg($controlId);
-      if ($isMapped) {
-        $command = 'amixer ' . $devCardInfo . ' -M set ' . $escapedControlId . ' -- ' . voltoDb($combinedVolume) . 'dB unmute >/dev/null 2>&1';
-      } else {
-        $command = 'amixer ' . $devCardInfo . ' cset ' . $escapedControlId . ' ' . $combinedLogVolume . '% unmute >/dev/null 2>&1';
-      }
+      $command = mixerVolumeCommand($devCardInfo, $controlId, (bool)$isMapped, $combinedVolume);
       debugLog($command);
-      exec ($command);      
+      exec ($command);
     }
     //Program music playing time and fade if set — runs regardless of mixer availability
       if ($setLength) {
@@ -578,6 +586,7 @@ function calculateBankHolidays($yr) {
                           i=' . $fadeStartVol . '
                           ' . ((DEBUG)?'echo "Starting fade from volume level $i" >> ' . $debugLog:'') . '
                             while [ $i -ge 0 ]; do
+                            [ -f ' . escapeshellarg(LIVEAUDIO_RECEIVING) . ' ] && exit 0
                             time=$(( time + ' . $fadeStepMs . ' ))
                               while [ $time -ge $( date +%s%3N ) ]; do
                                 sleep 0.001
@@ -1187,6 +1196,28 @@ function calculateBankHolidays($yr) {
 
   // mplayer -softvol level (linear gain %, 100 = unchanged) for a 0-99 volume,
   // using the same dB curve as the ALSA mixer volume for playlist entries
+  // Live Audio uses the sound card's volume, set the same way as for
+  // playlist entries, when the card has a mixer control. Otherwise (e.g.
+  // PulseAudio) mplayer applies the volume in software (liveAudioGain()).
+  function liveAudioMixer(): ?array {
+    $oldId = '';
+    $level = 0;
+    prepareMixer($oldId, $devCardInfo, $controlId, $level, $isMapped);
+    if (strlen((string)$controlId) <= 1) return null;
+    return ['dev' => $devCardInfo, 'control' => $controlId, 'mapped' => (bool)$isMapped];
+  }
+
+  // Apply the Live Audio volume to the sound card. Returns false if there
+  // is no mixer control to use.
+  function applyLiveAudioMixerVolume(int $volume): bool {
+    $mixer = liveAudioMixer();
+    if ($mixer === null) return false;
+    $command = mixerVolumeCommand($mixer['dev'], $mixer['control'], $mixer['mapped'], max(0, min(99, $volume)));
+    debugLog('Live Audio volume: ' . $command);
+    exec($command);
+    return true;
+  }
+
   function liveAudioGain(int $volume): float {
     return ($volume <= 0) ? 0 : round(100 * pow(10, voltoDb($volume) / 20), 1);
   }
@@ -1196,7 +1227,9 @@ function calculateBankHolidays($yr) {
     file_put_contents(LIVEAUDIO_VOLUME, (string)$volume);
     // Adjust a playing stream through mplayer's command FIFO. 'r+' never blocks
     // on a FIFO (unlike 'w', which waits for a reader).
-    if (liveAudioReceiving() && @filetype(LIVEAUDIO_FIFO) === 'fifo') {
+    if (!liveAudioReceiving()) return;
+    if (applyLiveAudioMixerVolume($volume)) return;
+    if (@filetype(LIVEAUDIO_FIFO) === 'fifo') {
       $fifo = @fopen(LIVEAUDIO_FIFO, 'r+');
       if ($fifo) {
         stream_set_blocking($fifo, false);
