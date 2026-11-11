@@ -42,7 +42,6 @@ COPY js/ /var/www/html/trafficcontrol/js/
 COPY img/ /var/www/html/trafficcontrol/img/
 COPY php/ /var/www/html/trafficcontrol/php/
 COPY scripts/ /var/www/html/trafficcontrol/scripts/
-COPY elFinder-2.1.65/ /var/www/html/trafficcontrol/elFinder-2.1.65/
 COPY jquery-ui-1.13.3/ /var/www/html/trafficcontrol/jquery-ui-1.13.3/
 COPY index.html more.html /var/www/html/trafficcontrol/
 

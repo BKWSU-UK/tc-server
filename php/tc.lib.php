@@ -1,5 +1,4 @@
 <?php
-  define ( 'ELFINDERPHP', dirname(__FILE__) . '/' . '..' . '/' . 'elFinder-2.1.65' . '/' . 'php' . '/');
   define ( 'PLAYLISTDIR', dirname(__FILE__) . '/' . '..' . '/' . 'Music');
   define ( 'SYSTEMDIR', dirname(__FILE__) . '/' . '..' . '/' . '.tcsys');
   define ( 'ROOTDIR', dirname(__FILE__) . '/' . '..' . '/');
@@ -647,63 +646,53 @@ function calculateBankHolidays($yr) {
     return $mime !== 'directory' && fmIsPlayable($file['name'] ?? '', $mime);
   }
 
-  function listAllSounds($phash = '') {
-    static $elFinder = null;
-
-    if ($elFinder === null) {
-      $prevErrorLevel = error_reporting(E_ALL & ~E_DEPRECATED & ~E_STRICT);
-      include_once ELFINDERPHP.'elFinder.class.php';
-      include_once ELFINDERPHP.'elFinderVolumeDriver.class.php';
-      include_once ELFINDERPHP.'elFinderVolumeLocalFileSystem.class.php';
-      error_reporting($prevErrorLevel);
-
-      $opts = array(
-        'roots' => array(
-          array(
-            'driver'        => 'LocalFileSystem',
-            'path'          => PLAYLISTDIR . '/',
-            'accessControl' => 'access'
-          )
-        )
-      );
-      $elFinder = new elFinder($opts);
+  // The files and folders in a Music folder (given by its hash, '' for
+  // Music itself), in the order the filesystem lists them. This is the
+  // order elFinder returned, which Sequential folder playback follows, so
+  // it must not be sorted. Hidden items (.system, partial uploads) and
+  // links leading outside Music are skipped. Returns null if the folder
+  // doesn't exist.
+  function musicFolderEntries(string $phash): ?array {
+    $rel = ($phash === '') ? '' : fmHashPath($phash);
+    if ($rel === null) return null;
+    $rel = trim($rel, '/');
+    $dir = fmResolve($rel);
+    if ($dir === null || !is_dir($dir)) return null;
+    try {
+      $iterator = new DirectoryIterator($dir);
+    } catch (Exception $e) {
+      return null;
     }
+    $entries = [];
+    foreach ($iterator as $f) {
+      if ($f->isDot()) continue;
+      $name = $f->getFilename();
+      if ($name === '' || $name[0] === '.') continue;
+      $path = fmJoin($rel, $name);
+      $abs = fmResolve($path);          // follows links; null if outside Music
+      if ($abs === null) continue;
+      $isDir = is_dir($abs);
+      $entries[] = [
+        'name' => $name,
+        'path' => $path,
+        'hash' => fmPathHash($path),
+        'phash' => fmPathHash($rel),
+        'mime' => $isDir ? 'directory' : ((string)@mime_content_type($abs) ?: 'application/octet-stream'),
+      ];
+    }
+    return $entries;
+  }
 
+  // Folders and playable files for the sound picker, plus the built-in Chime
+  // at the top level.
+  function listAllSounds($phash = '') {
     $sounds = array();
-
     if (empty($phash)) {
       $sounds[] = array('path' => 'Chime', 'name' => 'Chime', 'hash' => '', 'mime' => 'audio/chime');
-      $result = $elFinder->exec('open', array('target' => '', 'tree' => false, 'init' => true));
-      $currentPath = '';
-    } else {
-      if (!preg_match('/^[a-zA-Z0-9_]+$/', $phash)) {
-        return $sounds;
-      }
-      $result = $elFinder->exec('open', array('target' => $phash, 'tree' => false, 'init' => false));
-      $currentPath = '';
-      if (isset($result['cwd']['name'])) {
-        $currentPath = $result['cwd']['name'];
-      }
     }
-
-    if (isset($result['files'])) {
-      foreach ($result['files'] as $file) {
-        if (!isset($file['name']) || strpos($file['name'], '.') === 0) continue;
-        if (!empty($phash) && isset($file['phash']) && $file['phash'] !== $phash) continue;
-
-        $isDir = (isset($file['mime']) && $file['mime'] === 'directory');
-        $isAudio = !$isDir && fileIsAudio($file);
-
-        if ($isDir || $isAudio) {
-          $name = $file['name'];
-          $path = empty($currentPath) ? $name : $currentPath . '/' . $name;
-          $sounds[] = array(
-            'path' => $path,
-            'name' => $name,
-            'hash' => isset($file['hash']) ? $file['hash'] : '',
-            'mime' => isset($file['mime']) ? $file['mime'] : ''
-          );
-        }
+    foreach (musicFolderEntries((string)$phash) ?? [] as $file) {
+      if ($file['mime'] === 'directory' || fileIsAudio($file)) {
+        $sounds[] = array('path' => $file['path'], 'name' => $file['name'], 'hash' => $file['hash'], 'mime' => $file['mime']);
       }
     }
 
@@ -720,41 +709,12 @@ function calculateBankHolidays($yr) {
     return $sounds;
   }
 
+  // Playable files in a folder, in filesystem order (see
+  // musicFolderEntries()), for Random/Sequential folder playback.
   function listFiles ($phash) {
-    static $hasInit = false, $command;
-
-    if ($hasInit === false) {
-      $prevErrorLevel = error_reporting(E_ALL & ~E_DEPRECATED & ~E_STRICT);
-      include_once ELFINDERPHP.'elFinder.class.php';
-      include_once ELFINDERPHP.'elFinderVolumeDriver.class.php';
-      include_once ELFINDERPHP.'elFinderVolumeLocalFileSystem.class.php';
-      error_reporting($prevErrorLevel);
-
-      $opts = array(
-        // 'debug' => true,
-        'roots' => array(
-          array(
-            'driver'        => 'LocalFileSystem',   // driver for accessing file system (REQUIRED)
-            'path'          => PLAYLISTDIR . '/',        // path to files (REQUIRED)
-            'accessControl' => 'access'            // disable and hide dot starting files (OPTIONAL)
-          )
-        )
-      );
-      $args = array();
-      $command = new elFinder($opts);
-      $hasInit = true;
-    }
-
-    $args['target'] = $phash;
-    $args['tree'] = false;
-    $args['init'] = false;
-
-    $dirOpen = $command->exec('open',$args);
-    if (array_key_exists('files',$dirOpen)) {
-      return array_filter($dirOpen['files'], 'fileIsAudio');
-    } else {
-      return null;
-    }
+    $entries = musicFolderEntries((string)$phash);
+    if ($entries === null) return null;
+    return array_values(array_filter($entries, 'fileIsAudio'));
   }
 
   function directorySelect($index) {

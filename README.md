@@ -211,7 +211,6 @@ When in System mode, the **Preview Mode** toggle controls where preview playback
 - `Music/`: Root directory for audio files (symlinked to `/media/trafficcontrol` in the HA add-on).
 - `php/`: Core logic and scheduler.
 - `.tcsys/`: Persistent storage, locks, and logs (symlinked to `/data` in the HA add-on).
-- `elFinder-2.1.65/`: File manager for managing audio files via the web UI.
 - `Dockerfile`: Container definition for the HA add-on.
 - `config.yaml`: HA add-on manifest.
 - `build.yaml`: Base image configuration per CPU architecture.

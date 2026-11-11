@@ -106,7 +106,7 @@
       #List files in directory
       case 'listFiles':
             $phash = $_REQUEST['phash'] ?? '';
-            if (!preg_match('/^[a-zA-Z0-9_]+$/', $phash)) {
+            if (!preg_match('/^[a-zA-Z0-9_-]+$/', $phash)) {
                 header('Content-Type: application/json');
                 echo json_encode([]);
                 break;
